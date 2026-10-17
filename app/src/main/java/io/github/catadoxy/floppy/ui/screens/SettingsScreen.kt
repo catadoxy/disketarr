@@ -76,6 +76,7 @@ import io.github.catadoxy.floppy.viewmodel.SettingsUiState
 import io.github.catadoxy.floppy.viewmodel.SettingsViewModel
 import io.github.catadoxy.floppy.workers.UpcomingReminderWorker
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     onResetToSetup: () -> Unit,
@@ -219,22 +220,6 @@ fun SettingsScreen(
                     Text(if (uiState is SettingsUiState.DiagnosticsLoading) "Loading..." else "Permissions & Diagnostics")
                 }
 
-                Button(
-                    onClick = { viewModel.saveAndTest() },
-                    enabled = uiState !is SettingsUiState.Testing,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    if (uiState is SettingsUiState.Testing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier
-                                .size(16.dp)
-                                .padding(end = 8.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                    }
-                    Text(if (uiState is SettingsUiState.Testing) "Testing..." else "Save & Test")
-                }
             }
         }
 
@@ -434,50 +419,52 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
 
-                if (savedServers.isNotEmpty()) {
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     savedServers.forEach { server ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(server.name, style = MaterialTheme.typography.bodyMedium)
-                                Text(server.baseUrl, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            TextButton(onClick = {
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.clickable {
                                 baseUrl = server.baseUrl
                                 apiToken = server.apiToken
                                 viewModel.baseUrl = server.baseUrl
                                 viewModel.apiToken = server.apiToken
-                            }) { Text("Use") }
-                            IconButton(onClick = {
-                                viewModel.settingsStore.removeServer(server.id)
-                                savedServers = viewModel.settingsStore.savedServers()
-                            }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Remove server")
-                            }
+                            },
+                        ) {
+                            Text(
+                                text = server.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            )
                         }
                     }
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        try {
-                            val normalized = BaseUrlNormalizer.normalize(baseUrl)
-                            viewModel.settingsStore.saveServer(
-                                name = baseUrl,
-                                baseUrl = normalized,
-                                apiToken = apiToken,
-                            )
-                            savedServers = viewModel.settingsStore.savedServers()
-                        } catch (e: IllegalArgumentException) {
-                            // ignore; Save & Test reports URL errors
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Save current server")
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.clickable {
+                            try {
+                                val normalized = BaseUrlNormalizer.normalize(baseUrl)
+                                viewModel.settingsStore.saveServer(
+                                    name = baseUrl,
+                                    baseUrl = normalized,
+                                    apiToken = apiToken,
+                                )
+                                savedServers = viewModel.settingsStore.savedServers()
+                            } catch (e: IllegalArgumentException) {
+                                // ignore; Login dialog reports URL errors
+                            }
+                        },
+                    ) {
+                        Text(
+                            text = "Save current server",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        )
+                    }
                 }
 
             }
