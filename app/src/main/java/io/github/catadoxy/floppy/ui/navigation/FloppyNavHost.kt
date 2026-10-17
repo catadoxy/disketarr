@@ -242,7 +242,7 @@ fun FloppyNavHost(
 
 /** Parses `floppy://details/{source}/{mediaType}/{mediaId}` deep links. */
 private fun parseDeepLink(uri: Uri?): Triple<String, String, String>? {
-    if (uri == null || uri.scheme != "floppy") return null
+    if (uri == null || uri.scheme != "disketarr") return null
     // Supported forms:
     //   floppy://details/{source}/{mediaType}/{mediaId}  (host = "details")
     //   floppy:///details/{source}/{mediaType}/{mediaId} (legacy path form)

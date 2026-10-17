@@ -1,4 +1,4 @@
-# Floppy Android Client
+# Disketarr
 
 Native Android client for the self-hosted **Floppy** media tracker.  
 Built with Kotlin and Jetpack Compose against the Floppy REST API.
@@ -19,7 +19,7 @@ Built with Kotlin and Jetpack Compose against the Floppy REST API.
 - Offline cache (Room) for previously viewed pages
 - Daily upcoming-episode reminders (WorkManager)
 - Per-series reminder bell
-- Deep links: `floppy://details/{source}/{type}/{id}` + share sheet
+- Deep links: `disketarr://details/{source}/{type}/{id}` + share sheet
 - Statistics split by Shows/Series and Movies
 - Multiple themes (Floppy Blue, Purple, Ocean, Forest, Light) following system dark mode
 

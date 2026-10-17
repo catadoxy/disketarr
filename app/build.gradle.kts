@@ -38,7 +38,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "io.github.catadoxy.floppy"
+        applicationId = "io.github.catadoxy.disketarr"
         minSdk = 26
         targetSdk = 35
         versionCode = 13
