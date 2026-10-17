@@ -257,11 +257,29 @@ open class BrowseViewModel(
             }
 
             BrowseTab.HISTORY -> {
-                val items = withTimeoutOrNull(25000) {
-                    service.listHistoryRaw(limit = pageSize, offset = offset, flat = "1")
-                        .asHistoryItems(historyTypes)
-                }.orEmpty()
-                Page(items = items, hasMore = items.size >= pageSize)
+                if (mediaType == "movie") {
+                    // Movie history is sparse in the mixed history feed, so use the
+                    // tracked-media list (completed, newest first) instead.
+                    val payload = withTimeoutOrNull(25000) {
+                        service.listTrackedMediaRaw(
+                            mediaType = mediaType,
+                            statuses = listOf("3"),
+                            sort = "date_added",
+                            direction = "desc",
+                            limit = pageSize,
+                            offset = offset,
+                        )
+                    }
+                    val fetched = payload.extractRowsSafely().toSearchResults()
+                    val total = payload.asPaginationTotalOrNull() ?: fetched.size
+                    Page(items = fetched, hasMore = fetched.isNotEmpty() && offset + fetched.size < total)
+                } else {
+                    val items = withTimeoutOrNull(25000) {
+                        service.listHistoryRaw(limit = pageSize, offset = offset, flat = "1")
+                            .asHistoryItems(historyTypes)
+                    }.orEmpty()
+                    Page(items = items, hasMore = items.size >= pageSize)
+                }
             }
 
             BrowseTab.IN_PROGRESS, BrowseTab.WATCHED, BrowseTab.PLANNED -> {
