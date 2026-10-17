@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Floppy is self-hosted, so deployments show up in a few flavours:
+
+    - https://floppy.example.com   public domain behind TLS
+    - http://192.168.1.10:8000     plain HTTP on the LAN
+    - http://100.x.y.z:8000        Tailscale address, no certificate
+
+  Cleartext is permitted for every host so those plain-HTTP servers work.
+  HTTPS behaviour is left untouched: https:// requests are still validated
+  against the system trust anchors, so this does not weaken TLS.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

@@ -1,0 +1,61 @@
+name: Release APK
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          validate-wrappers: false
+
+      - name: Update Android version from tag
+        shell: bash
+        run: |
+          python3 scripts/bump-version.py --tag "${{ github.ref_name }}" --code "${{ github.run_number }}"
+
+      - name: Decode release keystore
+        if: ${{ env.RELEASE_STORE_BASE64 != '' }}
+        env:
+          RELEASE_STORE_BASE64: ${{ secrets.RELEASE_STORE_BASE64 }}
+        shell: bash
+        run: |
+          echo "$RELEASE_STORE_BASE64" | base64 --decode > release.jks
+          echo "RELEASE_STORE_FILE=$GITHUB_WORKSPACE/release.jks" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        env:
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        shell: bash
+        run: ./gradlew :app:assembleRelease
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: floppy-${{ github.ref_name }}-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" app/build/outputs/apk/release/*.apk --verify-tag --generate-notes --title "Floppy ${{ github.ref_name }}"

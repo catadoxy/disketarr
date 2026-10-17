@@ -1,0 +1,38 @@
+package io.github.catadoxy.floppy.ui.screens
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.hilt.navigation.compose.hiltViewModel
+import io.github.catadoxy.floppy.data.model.SearchResult
+import io.github.catadoxy.floppy.viewmodel.MoviesViewModel
+import io.github.catadoxy.floppy.viewmodel.ShowsViewModel
+
+
+@Composable
+fun ShowsScreen(
+    onOpenDetail: (SearchResult) -> Unit,
+    onOpenSearch: () -> Unit,
+) {
+    val viewModel: ShowsViewModel = hiltViewModel()
+    BrowseScreen(
+        viewModel = viewModel,
+        title = "Shows",
+        onOpenDetail = onOpenDetail,
+        onOpenSearch = onOpenSearch,
+    )
+}
+
+@Composable
+fun MoviesScreen(
+    onOpenDetail: (SearchResult) -> Unit,
+    onOpenSearch: () -> Unit,
+) {
+    val viewModel: MoviesViewModel = hiltViewModel()
+    BrowseScreen(
+        viewModel = viewModel,
+        title = "Movies",
+        onOpenDetail = onOpenDetail,
+        onOpenSearch = onOpenSearch,
+    )
+}

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive icon foreground: the floppy in dark navy with its shutter, label and
+  label rule punched back to the background cyan.
+
+  Drawn on the 108x108 canvas inside the 66dp safe zone (x/y 26..82). The corner
+  radius keeps the furthest point at radius ~36, the limit for a circular mask,
+  so no launcher clips the disk.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Disk body, with the anti-insertion corner cut from the top right. -->
+    <path
+        android:fillColor="#071E34"
+        android:pathData="M35,26 H66 L82,42 V73 a9,9 0 0 1 -9,9 H35 a9,9 0 0 1 -9,-9 V35 a9,9 0 0 1 9,-9 Z" />
+
+    <!-- Shutter. -->
+    <path
+        android:fillColor="#00B4D8"
+        android:pathData="M46,26 H56 a4,4 0 0 1 4,4 V44 a4,4 0 0 1 -4,4 H46 a4,4 0 0 1 -4,-4 V30 a4,4 0 0 1 4,-4 Z" />
+
+    <!-- Label. -->
+    <path
+        android:fillColor="#00B4D8"
+        android:pathData="M37,55 H71 a4,4 0 0 1 4,4 V68 a4,4 0 0 1 -4,4 H37 a4,4 0 0 1 -4,-4 V59 a4,4 0 0 1 4,-4 Z" />
+
+    <!-- The rule written across the label. -->
+    <path
+        android:fillColor="#071E34"
+        android:pathData="M40,60 H58 a2,2 0 0 1 0,4 H40 a2,2 0 0 1 0,-4 Z" />
+</vector>
