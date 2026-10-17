@@ -17,6 +17,9 @@ local.properties
 # Personal skill notes
 SKILL.md
 Skill.md
+
+# Design concepts
+design/
 .idea/
 *.iml
 captures/
