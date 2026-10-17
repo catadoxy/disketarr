@@ -115,6 +115,7 @@ open class BrowseViewModel(
 ) : ViewModel() {
 
     private val pageSize = 60
+    private val historyPageSize = 30
 
     private val _uiState = MutableStateFlow(BrowseUiState(tab = tabs.first()))
     val uiState: StateFlow<BrowseUiState> = _uiState.asStateFlow()
@@ -266,7 +267,7 @@ open class BrowseViewModel(
                             statuses = listOf("3"),
                             sort = "date_added",
                             direction = "desc",
-                            limit = pageSize,
+                            limit = historyPageSize,
                             offset = offset,
                         )
                     }
@@ -275,11 +276,11 @@ open class BrowseViewModel(
                     Page(items = fetched, hasMore = fetched.isNotEmpty() && offset + fetched.size < total)
                 } else {
                     val raw = withTimeoutOrNull(25000) {
-                        service.listHistoryRaw(limit = pageSize, offset = offset, flat = "1")
+                        service.listHistoryRaw(limit = historyPageSize, offset = offset, flat = "1")
                     }
                     val items = raw.asHistoryItems(historyTypes)
                     val rawCount = raw.extractRowsSafely().size
-                    Page(items = items, hasMore = rawCount >= pageSize)
+                    Page(items = items, hasMore = rawCount >= historyPageSize)
                 }
             }
 
