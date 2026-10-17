@@ -12,16 +12,18 @@ Built with Kotlin and Jetpack Compose against the Floppy REST API.
   - Track / untrack
   - Mark watched / unmark
   - Rating (0.0–10.0 slider)
-  - Add to list
   - Season & episode progress for shows
+  - Per-series reminder bell
 - Browse tabs: Discover, Planned, In progress, History, Upcoming, Watched
+- History loads 30 items initially for faster first paint
 - Saved server profiles for quick switching
 - Offline cache (Room) for previously viewed pages
-- Daily upcoming-episode reminders (WorkManager)
-- Per-series reminder bell
-- Deep links: `disketarr://details/{source}/{type}/{id}` + share sheet
+- Daily upcoming-episode reminders (WorkManager) with configurable lead time
+- Deep links: `disketarr://details/{source}/{type}/{id}`
 - Statistics split by Shows/Series and Movies
-- Multiple themes (Floppy Blue, Purple, Ocean, Forest, Light) following system dark mode
+- Categories filter (Movies/TV) to show/hide bottom tabs
+- Search recents + debounced typing
+- Multiple themes (Blue, Purple, Ocean, Forest, Light) following system dark mode
 
 ## Screenshots
 
@@ -54,7 +56,7 @@ Built with Kotlin and Jetpack Compose against the Floppy REST API.
 
 1. Open the project in Android Studio and sync Gradle.
 2. Build & run on an emulator or device.
-3. Enter your Floppy base URL and API token in **Settings → Floppy Login**.
+3. Enter your Floppy base URL and API token in **Settings → Login**.
 4. Save & test the connection.
 
 ## Build
@@ -68,16 +70,16 @@ Built with Kotlin and Jetpack Compose against the Floppy REST API.
 
 ## Releases
 
-Pushing a tag starting with `v` (e.g. `v0.2.1`) triggers the GitHub Actions release
+Pushing a tag starting with `v` (e.g. `v0.3.0`) triggers the GitHub Actions release
 workflow, which builds the release APK and attaches it to a GitHub Release.
 
 ## Project Structure
 
-- `app/src/main/java/io/github/catadoxy/floppy/ui` — screens, navigation, theme
-- `app/src/main/java/io/github/catadoxy/floppy/viewmodel` — ViewModels and UI state
-- `app/src/main/java/io/github/catadoxy/floppy/data` — models, API client, cache, settings
-- `app/src/main/java/io/github/catadoxy/floppy/di` — Hilt modules
-- `app/src/main/java/io/github/catadoxy/floppy/workers` — WorkManager tasks
+- `app/src/main/java/io/github/catadoxy/disketarr/ui` — screens, navigation, theme
+- `app/src/main/java/io/github/catadoxy/disketarr/viewmodel` — ViewModels and UI state
+- `app/src/main/java/io/github/catadoxy/disketarr/data` — models, API client, cache, settings
+- `app/src/main/java/io/github/catadoxy/disketarr/di` — Hilt modules
+- `app/src/main/java/io/github/catadoxy/disketarr/workers` — WorkManager tasks
 - `app/src/test/java/...` — unit tests
 
 ## Notes
@@ -85,3 +87,4 @@ workflow, which builds the release APK and attaches it to a GitHub Release.
 - Cleartext HTTP is enabled for self-hosted instances without TLS (see `network_security_config.xml`).
 - Base URLs without a scheme default to `http://` for LAN/loopback addresses and `https://` otherwise.
 - If an external auth layer (Authelia/SSO) fronts Floppy, ensure `/api/v1/*` is reachable by mobile clients.
+- Settings includes saved server profiles, category filters, reminder lead time, and a permissions/diagnostics probe.

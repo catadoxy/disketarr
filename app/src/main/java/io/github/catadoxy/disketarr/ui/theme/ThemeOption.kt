@@ -18,7 +18,7 @@ data class ThemeOption(
 )
 
 object ThemeCatalog {
-    const val DEFAULT_ID = "Disketarr_blue"
+    const val DEFAULT_ID = "blue"
 
     private val allOptions = listOf(
         ThemeOption(
@@ -30,7 +30,7 @@ object ThemeCatalog {
         ),
         ThemeOption(
             id = DEFAULT_ID,
-            label = "Disketarr Blue",
+            label = "Blue",
             lightScheme = lightColorScheme(
                 primary = DisketarrLightLink,
                 onPrimary = Color.White,
@@ -416,7 +416,9 @@ object ThemeCatalog {
         previewColor = Color(0xFF2563EB),
     )
 
-    val options = allOptions.filter { it.id in setOf("purple", DEFAULT_ID, "ocean", "forest") } + lightOption
+    val options = listOf(allOptions.first { it.id == DEFAULT_ID }) +
+        allOptions.filter { it.id in setOf("purple", "ocean", "forest") } +
+        lightOption
 
     fun getOption(id: String?): ThemeOption {
         return options.find { it.id == id } ?: options.first { it.id == DEFAULT_ID }
