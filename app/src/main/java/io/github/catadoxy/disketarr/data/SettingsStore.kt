@@ -57,12 +57,15 @@ class SettingsStore(context: Context) {
         set(value) = prefs.edit().putInt(KEY_REMINDER_LEAD_MINUTES, value.coerceAtLeast(0)).apply()
 
     fun selectedCategories(): Set<String> {
+        val allowed = setOf("movie", "tv")
         val raw = prefs.getStringSet(KEY_SELECTED_CATEGORIES, null)
-        return raw?.toSet() ?: io.github.catadoxy.disketarr.data.model.LibraryMediaTypes.ALL.toSet()
+        val chosen = raw?.toSet()?.intersect(allowed) ?: allowed
+        return chosen.ifEmpty { allowed }
     }
 
     fun saveSelectedCategories(selection: Set<String>) {
-        prefs.edit().putStringSet(KEY_SELECTED_CATEGORIES, selection).apply()
+        val allowed = setOf("movie", "tv")
+        prefs.edit().putStringSet(KEY_SELECTED_CATEGORIES, selection.intersect(allowed)).apply()
     }
 
     fun availableCategories(): Set<String> {
