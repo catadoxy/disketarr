@@ -34,6 +34,9 @@ interface FloppyApiService {
     @GET("api/v1/info/")
     suspend fun getServerInfo(): retrofit2.Response<Map<String, Any?>>
 
+    @GET("api/v1/lists/")
+    suspend fun getLists(): Map<String, Any?>
+
     @GET("api/v1/user/preferences/")
     suspend fun getUserPreferences(): retrofit2.Response<Unit>
 

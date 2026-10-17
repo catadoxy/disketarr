@@ -125,6 +125,7 @@ class ConnectionCheckTest {
         override suspend fun listTrackedMediaByTypeRaw(mediaType: String, statuses: List<String>?, limit: Int?, offset: Int?) = unsupported()
         override suspend fun listHistory(limit: Int?, offset: Int?) = unsupported()
         override suspend fun listHistoryRaw(limit: Int?, offset: Int?, flat: String?) = unsupported()
+        override suspend fun getLists() = unsupported()
         override suspend fun getMediaDetail(mediaType: String, source: String, mediaId: String) = unsupported()
         override suspend fun listSeasonsRaw(mediaType: String, source: String, mediaId: String, limit: Int?) = unsupported()
         override suspend fun listSeasonEpisodesRaw(mediaType: String, source: String, mediaId: String, seasonNumber: Int, limit: Int?) = unsupported()

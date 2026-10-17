@@ -150,6 +150,7 @@ class SettingsViewModel @Inject constructor(
                         Triple("GET /api/v1/media/ ?limit=1", "watchlist:read", suspend { service.listTrackedMediaRaw(limit = 1).let { 200 } }),
                         Triple("GET /api/v1/media/tv/ ?limit=1", "watchlist:read", suspend { service.listTrackedMediaByTypeRaw(mediaType = "tv", limit = 1).let { 200 } }),
                         Triple("GET /api/v1/history/ ?limit=1", "watchlist:read", suspend { service.listHistoryRaw(limit = 1).let { 200 } }),
+                        Triple("GET /api/v1/lists/", "lists:read", suspend { service.getLists().let { 200 } }),
                         Triple("GET /api/v1/search/movie/", "catalog:read", suspend { service.searchMedia(mediaType = "movie", query = "test", limit = 1, offset = 0).let { 200 } }),
                         Triple("GET /api/v1/statistics/overview/", "statistics:read", suspend { service.getStatisticsOverview().let { 200 } }),
                         Triple("GET /api/v1/user/preferences/", "user:read (unused by this app)", suspend { service.getUserPreferences().code() }),
