@@ -358,7 +358,13 @@ internal fun airsOnOrAfter(rawAirDate: String?, today: LocalDate): Boolean {
  */
 internal fun Any?.asHistoryItems(mediaTypes: Set<String>): List<SearchResult> {
     val root = this.toStringKeyMapOrNull() ?: return emptyList()
-    return (root["results"] as? List<*>).orEmpty().mapNotNull { rowAny ->
+
+    // Floppy can return either a flat list (`flat=1`) or day-grouped buckets.
+    // Accept both so a missed/ignored `flat` parameter does not empty the tab.
+    val rows: List<*> = (root["results"] as? List<*>)
+        ?: root.values.filterIsInstance<List<*>>().flatten()
+
+    return rows.mapNotNull { rowAny ->
         val row = rowAny.toStringKeyMapOrNull() ?: return@mapNotNull null
         val item = row["item"].toStringKeyMapOrNull() ?: return@mapNotNull null
 
