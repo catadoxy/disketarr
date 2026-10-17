@@ -108,6 +108,7 @@ fun SettingsScreen(
     }
     var savedServers by remember { mutableStateOf(viewModel.settingsStore.savedServers()) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    var showLeadTimeDialog by remember { mutableStateOf(false) }
     var showCategoriesDialog by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
     var showLoginDialog by remember { mutableStateOf(false) }
@@ -241,6 +242,7 @@ fun SettingsScreen(
                             if (it) {
                                 val req = PeriodicWorkRequestBuilder<UpcomingReminderWorker>(1, TimeUnit.DAYS).build()
                                 wm.enqueueUniquePeriodicWork("floppy_upcoming", ExistingPeriodicWorkPolicy.UPDATE, req)
+                                showLeadTimeDialog = true
                             } else {
                                 wm.cancelUniqueWork("floppy_upcoming")
                             }
@@ -248,46 +250,59 @@ fun SettingsScreen(
                     )
                 }
 
-                Text(
-                    text = "Reminder lead time",
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    OutlinedTextField(
-                        value = leadDays,
-                        onValueChange = {
-                            leadDays = it.filter { ch -> ch.isDigit() }
-                            updateLeadTime()
-                        },
-                        label = { Text("Days") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f),
+                if (episodeReminders) {
+                    Text(
+                        text = "Lead time: ${leadDays.ifBlank { "0" }}d ${leadHours.ifBlank { "0" }}h ${leadMinutes.ifBlank { "0" }}m (tap to edit)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable { showLeadTimeDialog = true },
                     )
-                    OutlinedTextField(
-                        value = leadHours,
-                        onValueChange = {
-                            leadHours = it.filter { ch -> ch.isDigit() }
-                            updateLeadTime()
+                }
+
+                if (showLeadTimeDialog) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showLeadTimeDialog = false },
+                        title = { Text("Reminder lead time") },
+                        text = {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                OutlinedTextField(
+                                    value = leadDays,
+                                    onValueChange = { leadDays = it.filter { ch -> ch.isDigit() } },
+                                    label = { Text("Days") },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.weight(1f),
+                                )
+                                OutlinedTextField(
+                                    value = leadHours,
+                                    onValueChange = { leadHours = it.filter { ch -> ch.isDigit() } },
+                                    label = { Text("Hours") },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.weight(1f),
+                                )
+                                OutlinedTextField(
+                                    value = leadMinutes,
+                                    onValueChange = { leadMinutes = it.filter { ch -> ch.isDigit() } },
+                                    label = { Text("Minutes") },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
                         },
-                        label = { Text("Hours") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f),
-                    )
-                    OutlinedTextField(
-                        value = leadMinutes,
-                        onValueChange = {
-                            leadMinutes = it.filter { ch -> ch.isDigit() }
-                            updateLeadTime()
+                        confirmButton = {
+                            TextButton(onClick = {
+                                updateLeadTime()
+                                showLeadTimeDialog = false
+                            }) { Text("Save") }
                         },
-                        label = { Text("Minutes") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f),
+                        dismissButton = {
+                            TextButton(onClick = { showLeadTimeDialog = false }) { Text("Cancel") }
+                        },
                     )
                 }
 
@@ -304,7 +319,7 @@ fun SettingsScreen(
                         title = { Text("Categories") },
                         text = {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                LibraryMediaTypes.options.filter { it.first in availableCategories }.forEach { (key, label) ->
+                                LibraryMediaTypes.options.filter { it.first in setOf("movie", "tv") }.forEach { (key, label) ->
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically,
