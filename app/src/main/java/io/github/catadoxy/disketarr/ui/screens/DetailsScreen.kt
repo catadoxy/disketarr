@@ -432,7 +432,7 @@ private fun NextEpisodeCard(episode: SeasonEpisode, fallbackImage: String?) {
 @Composable
 private fun RatingsRow(detail: MediaDetail) {
     val ratings = listOfNotNull(
-        detail.score?.let { "Disketarr" to it to detail.scoreCount },
+        detail.score?.let { "Floppy" to it to detail.scoreCount },
         detail.imdbRating?.let { "IMDb" to it to detail.imdbRatingCount },
     )
     if (ratings.isEmpty()) return

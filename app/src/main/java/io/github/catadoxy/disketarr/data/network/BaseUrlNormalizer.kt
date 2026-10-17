@@ -7,10 +7,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
  * Retrofit accepts.
  *
  * Disketarr is self-hosted, so the value can arrive in several shapes:
- *   - "https://Disketarr.example.com"   public domain behind TLS
+ *   - "https://floppy.example.com"   public domain behind TLS
  *   - "http://192.168.1.10:8000"     plain HTTP on the LAN
  *   - "http://100.101.102.103:8000"  Tailscale / CGNAT address
- *   - "Disketarr.local:8000"            no scheme at all
+ *   - "floppy.local:8000"            no scheme at all
  *
  * Rules:
  *   - An explicit http:// or https:// scheme is kept as entered.
@@ -29,7 +29,7 @@ object BaseUrlNormalizer {
         val trimmed = raw?.trim().orEmpty()
         require(trimmed.isNotEmpty()) {
             "Enter your Disketarr server URL, for example " +
-                "http://192.168.1.10:8000 or https://Disketarr.example.com"
+                "http://192.168.1.10:8000 or https://floppy.example.com"
         }
         require(!trimmed.contains("://") || hasHttpScheme(trimmed)) {
             "Only http:// and https:// URLs are supported."
@@ -40,7 +40,7 @@ object BaseUrlNormalizer {
         val parsed = candidate.toHttpUrlOrNull()
             ?: throw IllegalArgumentException(
                 "\"$trimmed\" doesn't look like a valid server URL. Try something like " +
-                    "http://192.168.1.10:8000 or https://Disketarr.example.com",
+                    "http://192.168.1.10:8000 or https://floppy.example.com",
             )
 
         // HttpUrl always renders a path, so this drops the slash it adds.

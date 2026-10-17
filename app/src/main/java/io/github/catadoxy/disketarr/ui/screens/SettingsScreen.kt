@@ -171,8 +171,8 @@ fun SettingsScreen(
                                         baseUrl = it
                                         viewModel.baseUrl = it
                                     },
-                                    label = { Text("Disketarr base URL") },
-                                    placeholder = { Text("192.168.1.10:8000 or https://Disketarr.example.com") },
+                                    label = { Text("Floppy base URL") },
+                                    placeholder = { Text("192.168.1.10:8000 or https://floppy.example.com") },
                                     singleLine = true,
                                     leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
                                     modifier = Modifier.fillMaxWidth(),

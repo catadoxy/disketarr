@@ -68,13 +68,13 @@ object ConnectionCheck {
  */
 internal fun connectionErrorMessage(outcome: ConnectionCheck.Outcome.Failed): String = when {
     outcome.code == 401 || outcome.code == 403 ->
-        "Disketarr rejected the token (HTTP ${outcome.code}). Create an App token under " +
+        "Floppy rejected the token (HTTP ${outcome.code}). Create an App token under " +
             "Settings -> Integrations -> App tokens and give it at least watchlist:read " +
             "and catalog:read - the \"Tracking\" preset already includes both."
 
     outcome.code == 404 ->
-        "Disketarr answered HTTP 404 for /api/v1/. Check that the base URL points at your " +
-            "Disketarr instance (not a reverse-proxy path or the login page)."
+        "Floppy answered HTTP 404 for /api/v1/. Check that the base URL points at your " +
+            "Floppy instance (not a reverse-proxy path or the login page)."
 
     outcome.code == -1 ->
         "Could not reach the server" +
@@ -82,7 +82,7 @@ internal fun connectionErrorMessage(outcome: ConnectionCheck.Outcome.Failed): St
             " Check the URL, the port, and that this device can see the host."
 
     outcome.code in 300..399 ->
-        "Disketarr redirected (HTTP ${outcome.code}). A login page (Authelia/SSO) is probably " +
+        "Floppy redirected (HTTP ${outcome.code}). A login page (Authelia/SSO) is probably " +
             "intercepting /api/v1 - see the README."
 
     else -> "Server responded with HTTP ${outcome.code}."

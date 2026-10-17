@@ -67,7 +67,7 @@ fun SetupScreen(
         Spacer(Modifier.height(12.dp))
 
         Text(
-            text = "Connect Disketarr",
+            text = "Connect Floppy",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
@@ -87,7 +87,7 @@ fun SetupScreen(
                 viewModel.baseUrl = it
             },
             label = { Text("Server URL") },
-            placeholder = { Text("192.168.1.10:8000 or https://Disketarr.example.com") },
+            placeholder = { Text("192.168.1.10:8000 or https://floppy.example.com") },
             supportingText = {
                 Text("HTTP and HTTPS are supported. LAN addresses default to HTTP.")
             },
@@ -149,7 +149,7 @@ fun SetupScreen(
 
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "Create an App token in Disketarr under Settings → Integrations → App tokens. The default Tracking permissions are sufficient.",
+            text = "Create an App token in Floppy under Settings → Integrations → App tokens. The default Tracking permissions are sufficient.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

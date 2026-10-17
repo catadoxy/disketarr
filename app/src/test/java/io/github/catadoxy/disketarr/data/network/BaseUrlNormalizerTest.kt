@@ -9,8 +9,8 @@ class BaseUrlNormalizerTest {
     @Test
     fun keeps_explicit_https_url() {
         assertEquals(
-            "https://disketarr.example.com",
-            BaseUrlNormalizer.normalize("https://disketarr.example.com"),
+            "https://floppy.example.com",
+            BaseUrlNormalizer.normalize("https://floppy.example.com"),
         )
     }
 
@@ -25,8 +25,8 @@ class BaseUrlNormalizerTest {
     @Test
     fun trims_whitespace_and_trailing_slash() {
         assertEquals(
-            "https://disketarr.example.com",
-            BaseUrlNormalizer.normalize("  HTTPS://disketarr.example.com/  "),
+            "https://floppy.example.com",
+            BaseUrlNormalizer.normalize("  https://floppy.example.com/  "),
         )
     }
 
@@ -55,16 +55,16 @@ class BaseUrlNormalizerTest {
 
     @Test
     fun defaults_mdns_and_internal_hosts_to_http() {
-        assertEquals("http://disketarr.local", BaseUrlNormalizer.normalize("disketarr.local"))
-        assertEquals("http://disketarr.lan:8080", BaseUrlNormalizer.normalize("disketarr.lan:8080"))
-        assertEquals("http://disketarr.internal", BaseUrlNormalizer.normalize("disketarr.internal"))
+        assertEquals("http://floppy.local", BaseUrlNormalizer.normalize("floppy.local"))
+        assertEquals("http://floppy.lan:8080", BaseUrlNormalizer.normalize("floppy.lan:8080"))
+        assertEquals("http://floppy.internal", BaseUrlNormalizer.normalize("floppy.internal"))
         assertEquals("http://disketarr", BaseUrlNormalizer.normalize("disketarr"))
     }
 
     @Test
     fun defaults_public_domains_to_https() {
-        assertEquals("https://disketarr.example.com", BaseUrlNormalizer.normalize("disketarr.example.com"))
-        assertEquals("https://disketarr.example.com:8443", BaseUrlNormalizer.normalize("disketarr.example.com:8443"))
+        assertEquals("https://floppy.example.com", BaseUrlNormalizer.normalize("floppy.example.com"))
+        assertEquals("https://floppy.example.com:8443", BaseUrlNormalizer.normalize("floppy.example.com:8443"))
         assertEquals("https://100.200.0.1:8000", BaseUrlNormalizer.normalize("100.200.0.1:8000"))
     }
 

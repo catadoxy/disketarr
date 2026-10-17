@@ -29,7 +29,7 @@ object ApiClient {
     @Synchronized
     fun getService(settingsStore: SettingsStore): DisketarrApiService {
         val configured = settingsStore.baseUrl?.takeIf { it.isNotBlank() }
-            ?: error("Disketarr base URL not configured yet")
+            ?: error("Floppy base URL not configured yet")
 
         // Accepts plain http:// hosts as well as https://, and tolerates a
         // missing scheme. Retrofit needs the trailing slash so relative paths

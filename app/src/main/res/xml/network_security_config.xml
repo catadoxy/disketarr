@@ -2,7 +2,7 @@
 <!--
   Disketarr is self-hosted, so deployments show up in a few flavours:
 
-    - https://Disketarr.example.com   public domain behind TLS
+    - https://floppy.example.com   public domain behind TLS
     - http://192.168.1.10:8000     plain HTTP on the LAN
     - http://100.x.y.z:8000        Tailscale address, no certificate
 

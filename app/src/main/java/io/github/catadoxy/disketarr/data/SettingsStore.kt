@@ -12,7 +12,7 @@ import java.util.UUID
 
 /**
  * Holds the two things this app needs to talk to Disketarr:
- *   - baseUrl: e.g. "https://Disketarr.example.com" or "http://192.168.1.10:8000"
+ *   - baseUrl: e.g. "https://floppy.example.com" or "http://192.168.1.10:8000"
  *   - apiToken: from Disketarr's Settings -> Advanced -> API Token
  *
  * Stored in EncryptedSharedPreferences so the token isn't sitting in

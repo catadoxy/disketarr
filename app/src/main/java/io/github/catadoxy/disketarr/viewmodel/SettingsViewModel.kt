@@ -137,7 +137,7 @@ class SettingsViewModel @Inject constructor(
                             else -> "${token.take(4)}…${token.takeLast(3)} (${token.length} chars)"
                         },
                     )
-                    append("\n\nEach line lists the scope Disketarr requires. A 403 means the")
+                    append("\n\nEach line lists the scope Floppy requires. A 403 means the")
                     append("\ntoken is missing that scope, not that the server is broken.")
                     append("\n")
 
