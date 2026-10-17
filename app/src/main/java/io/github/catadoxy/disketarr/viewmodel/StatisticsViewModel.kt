@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 import kotlinx.coroutines.withTimeoutOrNull
 
 data class StatisticsUiState(
@@ -56,10 +57,15 @@ class StatisticsViewModel @Inject constructor(
                     _uiState.value = StatisticsUiState(overview = overview, loading = false)
                 },
                 onFailure = { error ->
+                    val message = if (error is HttpException && error.code() == 403) {
+                        "Missing statistics:read permission for this API token."
+                    } else {
+                        error.message ?: "Could not load statistics"
+                    }
                     // Keep whatever we already had on screen.
                     _uiState.value = _uiState.value.copy(
                         loading = false,
-                        error = error.message ?: "Could not load statistics",
+                        error = message,
                     )
                 },
             )
