@@ -13,6 +13,10 @@ keystore.properties
 
 # Local machine config
 local.properties
+
+# Personal skill notes
+SKILL.md
+Skill.md
 .idea/
 *.iml
 captures/
