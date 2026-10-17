@@ -91,15 +91,25 @@ class SettingsViewModel @Inject constructor(
                 if (!settingsStore.isConfigured) return@withContext
                 val service = repository.service()
                 val available = mutableSetOf<String>()
+                val withData = mutableSetOf<String>()
                 for (type in LibraryMediaTypes.ALL) {
-                    val ok = runCatching {
+                    val result = runCatching {
                         service.searchMedia(mediaType = type, query = "a", limit = 1)
-                    }.isSuccess
-                    if (ok) available += type
+                    }
+                    if (result.isSuccess) {
+                        available += type
+                        val response = result.getOrNull()
+                        if (!response?.results.isNullOrEmpty() || (response?.pagination?.total ?: 0) > 0) {
+                            withData += type
+                        }
+                    }
                 }
-                if (available.isEmpty()) available += LibraryMediaTypes.ALL.toSet()
-                settingsStore.saveAvailableCategories(available)
-                _availableCategories.value = available
+                // Prefer categories that actually return data; fall back to any
+                // reachable type so we never hide everything on an empty library.
+                val finalAvailable = if (withData.isNotEmpty()) withData else available
+                if (finalAvailable.isEmpty()) finalAvailable += LibraryMediaTypes.ALL.toSet()
+                settingsStore.saveAvailableCategories(finalAvailable)
+                _availableCategories.value = finalAvailable
                 // Keep selection within available.
                 val selected = settingsStore.selectedCategories().intersect(available)
                 settingsStore.saveSelectedCategories(if (selected.isEmpty()) available else selected)
