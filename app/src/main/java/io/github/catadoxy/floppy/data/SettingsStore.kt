@@ -56,6 +56,15 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt(KEY_REMINDER_LEAD_MINUTES, 1440)
         set(value) = prefs.edit().putInt(KEY_REMINDER_LEAD_MINUTES, value.coerceAtLeast(0)).apply()
 
+    fun selectedCategories(): Set<String> {
+        val raw = prefs.getStringSet(KEY_SELECTED_CATEGORIES, null)
+        return raw?.toSet() ?: io.github.catadoxy.floppy.data.model.LibraryMediaTypes.ALL.toSet()
+    }
+
+    fun saveSelectedCategories(selection: Set<String>) {
+        prefs.edit().putStringSet(KEY_SELECTED_CATEGORIES, selection).apply()
+    }
+
     fun seriesReminders(): Set<String> =
         prefs.getStringSet(KEY_SERIES_REMINDERS, emptySet()) ?: emptySet()
 
@@ -221,6 +230,7 @@ class SettingsStore(context: Context) {
         private const val KEY_BROWSE_FILTER_PREFIX = "browse_filter_"
         private const val KEY_EPISODE_REMINDERS = "episode_reminders"
         private const val KEY_REMINDER_LEAD_MINUTES = "reminder_lead_minutes"
+        private const val KEY_SELECTED_CATEGORIES = "selected_categories"
         private const val KEY_SERIES_REMINDERS = "series_reminders"
         private const val KEY_SAVED_SERVERS = "saved_servers"
     }

@@ -83,16 +83,25 @@ fun FloppyNavHost(
             launchSingleTop = true
         }
     }
-    val startDestination = if (settingsStore.isConfigured) Routes.SHOWS else Routes.SETUP
+    val selectedCategories = settingsStore.selectedCategories()
+    val startDestination = if (!settingsStore.isConfigured) {
+        Routes.SETUP
+    } else if (selectedCategories.contains("tv")) {
+        Routes.SHOWS
+    } else if (selectedCategories.contains("movie")) {
+        Routes.MOVIES
+    } else {
+        Routes.STATISTICS
+    }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val bottomNavItems = listOf(
-        BottomNavItem(Routes.SHOWS, "Shows", Icons.Default.LiveTv),
-        BottomNavItem(Routes.MOVIES, "Movies", Icons.Default.Movie),
-        BottomNavItem(Routes.STATISTICS, "Stats", Icons.Default.BarChart),
-        BottomNavItem(Routes.SETTINGS, "Settings", Icons.Default.Settings),
-    )
+    val bottomNavItems = buildList {
+        if (selectedCategories.contains("tv")) add(BottomNavItem(Routes.SHOWS, "Shows", Icons.Default.LiveTv))
+        if (selectedCategories.contains("movie")) add(BottomNavItem(Routes.MOVIES, "Movies", Icons.Default.Movie))
+        add(BottomNavItem(Routes.STATISTICS, "Stats", Icons.Default.BarChart))
+        add(BottomNavItem(Routes.SETTINGS, "Settings", Icons.Default.Settings))
+    }
 
     val showBottomBar = currentRoute !in listOf(Routes.SETUP, Routes.DETAILS)
     val showAddFab = currentRoute == Routes.SHOWS || currentRoute == Routes.MOVIES

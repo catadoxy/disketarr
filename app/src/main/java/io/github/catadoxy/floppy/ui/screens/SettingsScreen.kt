@@ -29,6 +29,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Button
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -66,6 +69,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import io.github.catadoxy.floppy.MainActivity
 
+import io.github.catadoxy.floppy.data.model.LibraryMediaTypes
 import io.github.catadoxy.floppy.data.network.BaseUrlNormalizer
 import io.github.catadoxy.floppy.ui.theme.ThemeCatalog
 import io.github.catadoxy.floppy.viewmodel.SettingsUiState
@@ -94,6 +98,8 @@ fun SettingsScreen(
     }
     var savedServers by remember { mutableStateOf(viewModel.settingsStore.savedServers()) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    var selectedCategories by remember { mutableStateOf(viewModel.settingsStore.selectedCategories()) }
+    var showCategoriesDialog by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
     var showLoginDialog by remember { mutableStateOf(false) }
     var selectedThemeId by remember { mutableStateOf(viewModel.settingsStore.selectedThemeId) }
@@ -273,6 +279,44 @@ fun SettingsScreen(
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.weight(1f),
+                    )
+                }
+
+                Button(
+                    onClick = { showCategoriesDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Categories")
+                }
+
+                if (showCategoriesDialog) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showCategoriesDialog = false },
+                        title = { Text("Categories") },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                LibraryMediaTypes.options.forEach { (key, label) ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Checkbox(
+                                            checked = key in selectedCategories,
+                                            onCheckedChange = { checked ->
+                                                val updated = selectedCategories.toMutableSet()
+                                                if (checked) updated += key else updated -= key
+                                                selectedCategories = updated
+                                                viewModel.settingsStore.saveSelectedCategories(updated)
+                                            },
+                                        )
+                                        Text(label, modifier = Modifier.padding(start = 8.dp))
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showCategoriesDialog = false }) { Text("Done") }
+                        },
                     )
                 }
 
