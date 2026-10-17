@@ -218,6 +218,23 @@ fun SettingsScreen(
                     }
                     Text(if (uiState is SettingsUiState.DiagnosticsLoading) "Loading..." else "Permissions & Diagnostics")
                 }
+
+                Button(
+                    onClick = { viewModel.saveAndTest() },
+                    enabled = uiState !is SettingsUiState.Testing,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (uiState is SettingsUiState.Testing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(16.dp)
+                                .padding(end = 8.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
+                    Text(if (uiState is SettingsUiState.Testing) "Testing..." else "Save & Test")
+                }
             }
         }
 
@@ -341,6 +358,25 @@ fun SettingsScreen(
                     )
                 }
 
+            }
+        }
+
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = "Categories",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+
                 Button(
                     onClick = { showCategoriesDialog = true },
                     modifier = Modifier.fillMaxWidth(),
@@ -379,12 +415,26 @@ fun SettingsScreen(
                     )
                 }
 
+            }
+        }
+
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = "Saved servers",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+
                 if (savedServers.isNotEmpty()) {
-                    Text(
-                        text = "Saved servers",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
                     savedServers.forEach { server ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -428,23 +478,6 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("Save current server")
-                }
-
-                Button(
-                    onClick = { viewModel.saveAndTest() },
-                    enabled = uiState !is SettingsUiState.Testing,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    if (uiState is SettingsUiState.Testing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier
-                                .size(16.dp)
-                                .padding(end = 8.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                    }
-                    Text(if (uiState is SettingsUiState.Testing) "Testing..." else "Save & Test")
                 }
 
             }
