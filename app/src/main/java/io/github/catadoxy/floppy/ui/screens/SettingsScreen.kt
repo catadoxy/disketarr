@@ -218,6 +218,24 @@ fun SettingsScreen(
                     }
                     Text(if (uiState is SettingsUiState.DiagnosticsLoading) "Loading..." else "Permissions & Diagnostics")
                 }
+            }
+        }
+
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = "Preferences",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -225,7 +243,7 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Hide special episodes (season 0)",
+                        text = "Hide special episodes",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f),
