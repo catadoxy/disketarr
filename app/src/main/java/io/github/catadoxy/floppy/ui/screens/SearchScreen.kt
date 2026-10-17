@@ -89,6 +89,9 @@ fun SearchScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val recentSearches by viewModel.recentSearches.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
+    val selectedCategories = viewModel.settingsStore.selectedCategories().ifEmpty {
+        io.github.catadoxy.floppy.data.model.LibraryMediaTypes.ALL.toSet()
+    }
     val mediaTypes = listOf(
         MediaTypeOption("movie", "Movie", Icons.Default.Movie),
         MediaTypeOption("tv", "TV", Icons.Default.LiveTv),
@@ -100,7 +103,7 @@ fun SearchScreen(
         MediaTypeOption("podcast", "Podcast", Icons.Default.MusicNote),
         MediaTypeOption("book", "Book", Icons.AutoMirrored.Filled.MenuBook),
         MediaTypeOption("comic", "Comic", Icons.AutoMirrored.Filled.MenuBook),
-    )
+    ).filter { selectedCategories.contains(normalizeMediaType(it.key)) }
     var selectedType by remember { mutableStateOf("movie") }
     var gridLayout by remember { mutableStateOf(true) }
 

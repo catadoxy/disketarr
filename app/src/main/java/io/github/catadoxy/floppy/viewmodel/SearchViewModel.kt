@@ -69,7 +69,7 @@ fun mergeSearchResults(
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-    private val settingsStore: SettingsStore,
+    val settingsStore: SettingsStore,
     private val repository: FloppyRepository = FloppyRepository(settingsStore),
 ) : ViewModel() {
 

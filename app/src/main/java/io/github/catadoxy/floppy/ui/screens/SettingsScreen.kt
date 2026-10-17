@@ -82,6 +82,16 @@ fun SettingsScreen(
 ) {
     val viewModel: SettingsViewModel = hiltViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val availableCategories by viewModel.availableCategories.collectAsStateWithLifecycle()
+
+    var selectedCategories by remember { mutableStateOf(viewModel.settingsStore.selectedCategories()) }
+
+    LaunchedEffect(Unit) { viewModel.checkAvailableCategories() }
+    LaunchedEffect(availableCategories) {
+        selectedCategories = selectedCategories.intersect(availableCategories)
+        if (selectedCategories.isEmpty()) selectedCategories = availableCategories
+        viewModel.settingsStore.saveSelectedCategories(selectedCategories)
+    }
 
     var baseUrl by remember { mutableStateOf(viewModel.baseUrl) }
     var apiToken by remember { mutableStateOf(viewModel.apiToken) }
@@ -98,7 +108,6 @@ fun SettingsScreen(
     }
     var savedServers by remember { mutableStateOf(viewModel.settingsStore.savedServers()) }
     val context = androidx.compose.ui.platform.LocalContext.current
-    var selectedCategories by remember { mutableStateOf(viewModel.settingsStore.selectedCategories()) }
     var showCategoriesDialog by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
     var showLoginDialog by remember { mutableStateOf(false) }
@@ -295,7 +304,7 @@ fun SettingsScreen(
                         title = { Text("Categories") },
                         text = {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                LibraryMediaTypes.options.forEach { (key, label) ->
+                                LibraryMediaTypes.options.filter { it.first in availableCategories }.forEach { (key, label) ->
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically,

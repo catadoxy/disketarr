@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.catadoxy.floppy.data.AppCacheRepository
 import io.github.catadoxy.floppy.data.SettingsStore
+import io.github.catadoxy.floppy.data.model.LibraryMediaTypes
 import javax.inject.Inject
 import io.github.catadoxy.floppy.data.repository.FloppyRepository
 import io.github.catadoxy.floppy.data.network.BaseUrlNormalizer
@@ -35,6 +36,9 @@ class SettingsViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<SettingsUiState>(SettingsUiState.Idle)
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    private val _availableCategories = MutableStateFlow(settingsStore.availableCategories())
+    val availableCategories: StateFlow<Set<String>> = _availableCategories.asStateFlow()
 
     var baseUrl: String = settingsStore.baseUrl.orEmpty()
     var apiToken: String = settingsStore.apiToken.orEmpty()
@@ -80,6 +84,28 @@ class SettingsViewModel @Inject constructor(
         _uiState.value = SettingsUiState.Success("Saved credentials cleared.")
     }
     fun clearCache() = appCache.clear()
+
+    fun checkAvailableCategories() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                if (!settingsStore.isConfigured) return@withContext
+                val service = repository.service()
+                val available = mutableSetOf<String>()
+                for (type in LibraryMediaTypes.ALL) {
+                    val ok = runCatching {
+                        service.searchMedia(mediaType = type, query = "a", limit = 1)
+                    }.isSuccess
+                    if (ok) available += type
+                }
+                if (available.isEmpty()) available += LibraryMediaTypes.ALL.toSet()
+                settingsStore.saveAvailableCategories(available)
+                _availableCategories.value = available
+                // Keep selection within available.
+                val selected = settingsStore.selectedCategories().intersect(available)
+                settingsStore.saveSelectedCategories(if (selected.isEmpty()) available else selected)
+            }
+        }
+    }
 
 
     fun runDiagnostics() {
