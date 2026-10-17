@@ -274,11 +274,12 @@ open class BrowseViewModel(
                     val total = payload.asPaginationTotalOrNull() ?: fetched.size
                     Page(items = fetched, hasMore = fetched.isNotEmpty() && offset + fetched.size < total)
                 } else {
-                    val items = withTimeoutOrNull(25000) {
+                    val raw = withTimeoutOrNull(25000) {
                         service.listHistoryRaw(limit = pageSize, offset = offset, flat = "1")
-                            .asHistoryItems(historyTypes)
-                    }.orEmpty()
-                    Page(items = items, hasMore = items.size >= pageSize)
+                    }
+                    val items = raw.asHistoryItems(historyTypes)
+                    val rawCount = raw.extractRowsSafely().size
+                    Page(items = items, hasMore = rawCount >= pageSize)
                 }
             }
 
