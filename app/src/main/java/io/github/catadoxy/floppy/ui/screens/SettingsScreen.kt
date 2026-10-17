@@ -155,13 +155,13 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.Default.Key, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text("Floppy Login")
+                    Text("Login")
                 }
 
                 if (showLoginDialog) {
                     androidx.compose.material3.AlertDialog(
                         onDismissRequest = { showLoginDialog = false },
-                        title = { Text("Floppy login") },
+                        title = { Text("Login") },
                         text = {
                             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 OutlinedTextField(
@@ -200,6 +200,23 @@ fun SettingsScreen(
                             TextButton(onClick = { showLoginDialog = false }) { Text("Cancel") }
                         },
                     )
+                }
+
+                OutlinedButton(
+                    onClick = { viewModel.runDiagnostics() },
+                    enabled = uiState !is SettingsUiState.DiagnosticsLoading,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (uiState is SettingsUiState.DiagnosticsLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(16.dp)
+                                .padding(end = 8.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onSecondary,
+                        )
+                    }
+                    Text(if (uiState is SettingsUiState.DiagnosticsLoading) "Loading..." else "Permissions & Diagnostics")
                 }
 
                 Row(
@@ -410,23 +427,6 @@ fun SettingsScreen(
                         )
                     }
                     Text(if (uiState is SettingsUiState.Testing) "Testing..." else "Save & Test")
-                }
-
-                OutlinedButton(
-                    onClick = { viewModel.runDiagnostics() },
-                    enabled = uiState !is SettingsUiState.DiagnosticsLoading,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    if (uiState is SettingsUiState.DiagnosticsLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier
-                                .size(16.dp)
-                                .padding(end = 8.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onSecondary,
-                        )
-                    }
-                    Text(if (uiState is SettingsUiState.DiagnosticsLoading) "Loading..." else "Permissions & Diagnostics")
                 }
 
             }
