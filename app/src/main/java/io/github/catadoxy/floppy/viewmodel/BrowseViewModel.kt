@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
 import java.time.LocalDate
 
 /** A tab on the Shows or Movies screen. */
@@ -123,6 +124,7 @@ open class BrowseViewModel(
         if (mediaType == "tv") setOf("tv", "season", "episode") else setOf(mediaType)
 
     init {
+        _uiState.value = BrowseUiState(tab = tabs.first(), filter = loadSavedFilter())
         load(tabs.first(), force = false)
     }
 
@@ -132,10 +134,43 @@ open class BrowseViewModel(
 
     fun applyFilter(filter: BrowseFilter) {
         _uiState.value = _uiState.value.copy(filter = filter)
+        settingsStore.saveBrowseFilter(mediaType, filterToJson(filter))
         load(_uiState.value.tab, force = true)
     }
 
     fun forceRefresh() = load(_uiState.value.tab, force = true)
+
+    private fun loadSavedFilter(): BrowseFilter {
+        val raw = settingsStore.loadBrowseFilter(mediaType) ?: return BrowseFilter()
+        return runCatching {
+            val o = JSONObject(raw)
+            BrowseFilter(
+                rating = o.optString("rating").ifBlank { null },
+                ratingMin = if (o.has("ratingMin")) o.optDouble("ratingMin") else null,
+                genre = o.optString("genre").ifBlank { null },
+                year = o.optString("year").ifBlank { null },
+                progress = o.optString("progress").ifBlank { null },
+                collection = o.optString("collection").ifBlank { null },
+                sort = o.optString("sort").ifBlank { null },
+                direction = o.optString("direction").ifBlank { null },
+                query = o.optString("query", ""),
+            )
+        }.getOrDefault(BrowseFilter())
+    }
+
+    private fun filterToJson(filter: BrowseFilter): String {
+        val o = JSONObject()
+        filter.rating?.let { o.put("rating", it) }
+        filter.ratingMin?.let { o.put("ratingMin", it) }
+        filter.genre?.let { o.put("genre", it) }
+        filter.year?.let { o.put("year", it) }
+        filter.progress?.let { o.put("progress", it) }
+        filter.collection?.let { o.put("collection", it) }
+        filter.sort?.let { o.put("sort", it) }
+        filter.direction?.let { o.put("direction", it) }
+        o.put("query", filter.query)
+        return o.toString()
+    }
 
     fun loadMore() {
         val state = _uiState.value

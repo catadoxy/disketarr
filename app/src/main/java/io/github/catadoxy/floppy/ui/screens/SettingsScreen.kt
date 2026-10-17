@@ -358,7 +358,7 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSecondary,
                         )
                     }
-                    Text(if (uiState is SettingsUiState.DiagnosticsLoading) "Loading..." else "Diagnostics")
+                    Text(if (uiState is SettingsUiState.DiagnosticsLoading) "Loading..." else "Permissions & Diagnostics")
                 }
 
             }

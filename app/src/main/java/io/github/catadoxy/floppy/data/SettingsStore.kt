@@ -99,6 +99,13 @@ class SettingsStore(context: Context) {
         prefs.edit().remove(KEY_RECENT_SEARCHES).apply()
     }
 
+    fun saveBrowseFilter(mediaType: String, json: String) {
+        prefs.edit().putString(KEY_BROWSE_FILTER_PREFIX + mediaType, json).apply()
+    }
+
+    fun loadBrowseFilter(mediaType: String): String? =
+        prefs.getString(KEY_BROWSE_FILTER_PREFIX + mediaType, null)
+
     data class SavedServer(
         val id: String,
         val name: String,
@@ -211,6 +218,7 @@ class SettingsStore(context: Context) {
         private const val KEY_SELECTED_THEME = "selected_theme"
         private const val KEY_HIDE_SPECIAL_EPISODES = "hide_special_episodes"
         private const val KEY_RECENT_SEARCHES = "recent_searches"
+        private const val KEY_BROWSE_FILTER_PREFIX = "browse_filter_"
         private const val KEY_EPISODE_REMINDERS = "episode_reminders"
         private const val KEY_REMINDER_LEAD_MINUTES = "reminder_lead_minutes"
         private const val KEY_SERIES_REMINDERS = "series_reminders"
