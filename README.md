@@ -23,6 +23,16 @@ Built with Kotlin and Jetpack Compose against the Floppy REST API.
 - Statistics split by Shows/Series and Movies
 - Multiple themes (Floppy Blue, Purple, Ocean, Forest, Light) following system dark mode
 
+## Screenshots
+
+| Shows | Movies | Statistics |
+| --- | --- | --- |
+| ![Shows](docs/screenshots/shows.jpg) | ![Movies](docs/screenshots/movies.jpg) | ![Statistics](docs/screenshots/statistics.jpg) |
+
+| Details | Settings |
+| --- | --- |
+| ![Details](docs/screenshots/details.jpg) | ![Settings](docs/screenshots/settings.jpg) |
+
 ## Tech Stack
 
 - Kotlin + Jetpack Compose (Material 3)
