@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "FloppyClient"
+rootProject.name = "DisketarrClient"
 include(":app")

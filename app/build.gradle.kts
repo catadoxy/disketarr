@@ -14,7 +14,7 @@ val releaseSigningConfigured = listOf(
 ).all { !it.isNullOrBlank() }
 
 android {
-    namespace = "io.github.catadoxy.floppy"
+    namespace = "io.github.catadoxy.disketarr"
     compileSdk = 35
 
     signingConfigs {

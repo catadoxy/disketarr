@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Solid Floppy Blue field. The floppy in the foreground layer is knocked
+<!-- Solid Disketarr Blue field. The Disketarr in the foreground layer is knocked
      out of it, so the shutter and label read as holes in the disk. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
