@@ -375,7 +375,7 @@ fun SettingsScreen(
                         title = { Text("Categories") },
                         text = {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                LibraryMediaTypes.options.filter { it.first in setOf("movie", "tv") }.forEach { (key, label) ->
+                                LibraryMediaTypes.options.filter { it.first in setOf("movie", "tv", "anime") }.forEach { (key, label) ->
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically,

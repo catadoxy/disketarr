@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
@@ -31,6 +32,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import io.github.catadoxy.disketarr.data.SettingsStore
+import io.github.catadoxy.disketarr.ui.screens.AnimeScreen
 import io.github.catadoxy.disketarr.ui.screens.DetailsScreen
 import io.github.catadoxy.disketarr.ui.screens.MoviesScreen
 import io.github.catadoxy.disketarr.ui.screens.SearchScreen
@@ -44,6 +46,7 @@ private object Routes {
     const val SETUP = "setup"
     const val SHOWS = "shows"
     const val MOVIES = "movies"
+    const val ANIME = "anime"
     const val SEARCH = "search"
     const val STATISTICS = "statistics"
     const val SETTINGS = "settings"
@@ -90,6 +93,8 @@ fun DisketarrNavHost(
         Routes.SHOWS
     } else if (selectedCategories.contains("movie")) {
         Routes.MOVIES
+    } else if (selectedCategories.contains("anime")) {
+        Routes.ANIME
     } else {
         Routes.STATISTICS
     }
@@ -99,6 +104,7 @@ fun DisketarrNavHost(
     val bottomNavItems = buildList {
         if (selectedCategories.contains("tv")) add(BottomNavItem(Routes.SHOWS, "Shows", Icons.Default.LiveTv))
         if (selectedCategories.contains("movie")) add(BottomNavItem(Routes.MOVIES, "Movies", Icons.Default.Movie))
+        if (selectedCategories.contains("anime")) add(BottomNavItem(Routes.ANIME, "Anime", Icons.Default.AutoAwesome))
         add(BottomNavItem(Routes.STATISTICS, "Stats", Icons.Default.BarChart))
         add(BottomNavItem(Routes.SETTINGS, "Settings", Icons.Default.Settings))
     }
@@ -188,6 +194,19 @@ fun DisketarrNavHost(
 
             composable(Routes.MOVIES) {
                 MoviesScreen(
+                    onOpenDetail = { result ->
+                        navController.navigate(
+                            Routes.details(result.source, result.mediaType, result.mediaId),
+                        )
+                    },
+                    onOpenSearch = {
+                        navController.navigate(Routes.SEARCH) { launchSingleTop = true }
+                    },
+                )
+            }
+
+            composable(Routes.ANIME) {
+                AnimeScreen(
                     onOpenDetail = { result ->
                         navController.navigate(
                             Routes.details(result.source, result.mediaType, result.mediaId),

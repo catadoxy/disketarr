@@ -384,3 +384,10 @@ class MoviesViewModel @Inject constructor(
     appCache: AppCacheRepository = AppCacheRepository(),
 ) : BrowseViewModel(settingsStore, repository, appCache, mediaType = "movie", tabs = MOVIE_TABS)
 
+@HiltViewModel
+class AnimeViewModel @Inject constructor(
+    settingsStore: SettingsStore,
+    repository: DisketarrRepository = DisketarrRepository(settingsStore),
+    appCache: AppCacheRepository = AppCacheRepository(),
+) : BrowseViewModel(settingsStore, repository, appCache, mediaType = "anime", tabs = SHOW_TABS)
+

@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import io.github.catadoxy.disketarr.data.model.SearchResult
+import io.github.catadoxy.disketarr.viewmodel.AnimeViewModel
 import io.github.catadoxy.disketarr.viewmodel.MoviesViewModel
 import io.github.catadoxy.disketarr.viewmodel.ShowsViewModel
 
@@ -32,6 +33,20 @@ fun MoviesScreen(
     BrowseScreen(
         viewModel = viewModel,
         title = "Movies",
+        onOpenDetail = onOpenDetail,
+        onOpenSearch = onOpenSearch,
+    )
+}
+
+@Composable
+fun AnimeScreen(
+    onOpenDetail: (SearchResult) -> Unit,
+    onOpenSearch: () -> Unit,
+) {
+    val viewModel: AnimeViewModel = hiltViewModel()
+    BrowseScreen(
+        viewModel = viewModel,
+        title = "Anime",
         onOpenDetail = onOpenDetail,
         onOpenSearch = onOpenSearch,
     )
