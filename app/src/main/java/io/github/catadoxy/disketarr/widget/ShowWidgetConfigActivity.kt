@@ -77,8 +77,7 @@ class ShowWidgetConfigActivity : ComponentActivity() {
                             }
                             sendBroadcast(updateIntent)
 
-                            val request = OneTimeWorkRequestBuilder<ShowWidgetUpdateWorker>().build()
-                            WorkManager.getInstance(this@ShowWidgetConfigActivity).enqueue(request)
+                            ShowWidgetUpdater.update(this@ShowWidgetConfigActivity, appWidgetId)
 
                             setResult(Activity.RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
                             finish()
