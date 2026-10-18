@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.work.OneTimeWorkRequestBuilder
@@ -51,11 +52,14 @@ class ShowWidgetConfigActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     ConfigScreen(
-                        onSave = { type, sort ->
+                        onSave = { type, sort, theme, bg, largeFont ->
                             val prefs = getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
                             prefs.edit()
                                 .putString("type_$appWidgetId", type)
                                 .putString("sort_$appWidgetId", sort)
+                                .putString("theme_$appWidgetId", theme)
+                                .putInt("bg_$appWidgetId", bg)
+                                .putBoolean("largefont_$appWidgetId", largeFont)
                                 .apply()
 
                             val updateIntent = Intent(this@ShowWidgetConfigActivity, ShowWidgetProvider::class.java).apply {
@@ -79,11 +83,16 @@ class ShowWidgetConfigActivity : ComponentActivity() {
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun ConfigScreen(onSave: (String, String) -> Unit) {
+private fun ConfigScreen(onSave: (String, String, String, Int, Boolean) -> Unit) {
     var type by remember { mutableStateOf("upcoming") }
     var sort by remember { mutableStateOf("latest") }
+    var theme by remember { mutableStateOf("system") }
+    var bg by remember { mutableStateOf(100) }
+    var largeFont by remember { mutableStateOf(false) }
     var typeExpanded by remember { mutableStateOf(false) }
     var sortExpanded by remember { mutableStateOf(false) }
+    var themeExpanded by remember { mutableStateOf(false) }
+    var bgExpanded by remember { mutableStateOf(false) }
 
     val types = listOf("upcoming" to "Upcoming", "recent" to "Recent", "shows" to "Shows")
     val sorts = listOf(
@@ -93,6 +102,8 @@ private fun ConfigScreen(onSave: (String, String) -> Unit) {
         "lastwatched" to "Last watched",
         "remaining" to "Remaining episodes",
     )
+    val themes = listOf("system" to "System", "light" to "Light", "dark" to "Dark")
+    val backgrounds = listOf(0 to "Transparent", 25 to "25%", 50 to "50%", 75 to "75%", 100 to "Opaque")
 
     Column(
         modifier = Modifier
@@ -144,7 +155,61 @@ private fun ConfigScreen(onSave: (String, String) -> Unit) {
             }
         }
 
-        Button(onClick = { onSave(type, sort) }, modifier = Modifier.fillMaxWidth()) {
+        ExposedDropdownMenuBox(expanded = themeExpanded, onExpandedChange = { themeExpanded = it }) {
+            OutlinedTextField(
+                value = themes.first { it.first == theme }.second,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Theme") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = themeExpanded) },
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth(),
+            )
+            DropdownMenu(expanded = themeExpanded, onDismissRequest = { themeExpanded = false }) {
+                themes.forEach { (value, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = { theme = value; themeExpanded = false },
+                    )
+                }
+            }
+        }
+
+        ExposedDropdownMenuBox(expanded = bgExpanded, onExpandedChange = { bgExpanded = it }) {
+            OutlinedTextField(
+                value = backgrounds.first { it.first == bg }.second,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Background opacity") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = bgExpanded) },
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth(),
+            )
+            DropdownMenu(expanded = bgExpanded, onDismissRequest = { bgExpanded = false }) {
+                backgrounds.forEach { (value, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = { bg = value; bgExpanded = false },
+                    )
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Large font")
+            androidx.compose.material3.Switch(
+                checked = largeFont,
+                onCheckedChange = { largeFont = it },
+            )
+        }
+
+        Button(onClick = { onSave(type, sort, theme, bg, largeFont) }, modifier = Modifier.fillMaxWidth()) {
             Text("Save")
         }
     }

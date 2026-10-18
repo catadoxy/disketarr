@@ -1,20 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:padding="12dp"
     android:background="@android:color/white">
 
-    <TextView
-        android:id="@+id/widget_title"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Disketarr upcoming"
-        android:textStyle="bold"
-        android:textSize="14sp"
-        android:textColor="#111827"
-        android:paddingBottom="8dp" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Disketarr upcoming"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:textColor="#111827"
+            android:paddingBottom="8dp" />
+
+        <TextView
+            android:id="@+id/widget_configure"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Configure"
+            android:textSize="11sp"
+            android:textColor="#2563EB"
+            android:padding="4dp" />
+    </LinearLayout>
 
     <ListView
         android:id="@+id/widget_list"

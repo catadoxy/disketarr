@@ -72,12 +72,18 @@ class ShowWidgetFactory(
     override fun getViewAt(position: Int): RemoteViews {
         val item = items[position]
         val views = RemoteViews(context.packageName, R.layout.widget_list_item)
+        val prefs = context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
+        val largeFont = prefs.getBoolean("largefont_$appWidgetId", false)
+        val titleSize = if (largeFont) 16f else 13f
+        val subtitleSize = if (largeFont) 13f else 11f
         views.setTextViewText(R.id.item_title, item.title ?: "Untitled")
+        views.setFloat(R.id.item_title, "setTextSize", titleSize)
         val subtitle = listOfNotNull(
             item.nextEpisode?.let { "S${it.seasonNumber ?: 1}E${it.episodeNumber}" },
             item.nextEpisode?.airDate?.take(10),
         ).joinToString(" · ")
         views.setTextViewText(R.id.item_subtitle, subtitle)
+        views.setFloat(R.id.item_subtitle, "setTextSize", subtitleSize)
 
         val fillInIntent = Intent().apply {
             putExtra("source", item.source)
