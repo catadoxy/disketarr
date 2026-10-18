@@ -4,5 +4,6 @@
     android:minHeight="110dp"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget_show_list"
+    android:configure="io.github.catadoxy.disketarr.widget.ShowWidgetConfigActivity"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen" />

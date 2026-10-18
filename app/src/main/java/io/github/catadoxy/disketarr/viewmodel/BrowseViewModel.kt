@@ -326,44 +326,6 @@ open class BrowseViewModel(
         page
     }
 
-    private fun List<Map<String, Any?>>.toSearchResults(): List<SearchResult> {
-        return mapNotNull { tracked ->
-            val item = tracked["item"].toStringKeyMapOrNull()
-
-            val mediaId = (
-                item?.get("media_id") ?: item?.get("id")
-                    ?: tracked["media_id"] ?: tracked["id"] ?: tracked["item_id"]
-                )?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-
-            val source = (
-                item?.get("source") ?: tracked["source"]
-                )?.toString()?.takeIf { it.isNotBlank() } ?: "unknown"
-
-            // Label rows with media_type ("tv"). library_media_type can be a
-            // tracking granularity - The Vermilion Mask is recorded as "season" -
-            // which printed "Season" on a Shows row. Routing still maps
-            // season/episode back to the tv endpoint via detailRouteMediaType().
-            val rawMediaType = (
-                item?.get("media_type") ?: item?.get("library_media_type")
-                    ?: tracked["media_type"] ?: tracked["library_media_type"]
-                )?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-
-            SearchResult(
-                mediaId = mediaId,
-                source = source,
-                mediaType = rawMediaType.lowercase(),
-                title = (item?.get("title") ?: tracked["title"])?.toString()?.takeIf { it.isNotBlank() },
-                image = (item?.get("image") ?: tracked["image"])?.toString()?.takeIf { it.isNotBlank() },
-                lastWatchedAt = (tracked["progressed_at"] ?: item?.get("progressed_at"))?.toString(),
-                status = (tracked["status"] ?: item?.get("status")).asIntOrNull(),
-                progress = (tracked["progress"] ?: item?.get("progress")).asDoubleOrNull(),
-                score = (tracked["score"] ?: item?.get("score")).asDoubleOrNull(),
-                nextEpisode = (tracked["next_episode"] ?: item?.get("next_episode")).asNextEpisodeOrNull(),
-                episodesLeft = (tracked["episodes_left"] ?: item?.get("episodes_left")).asIntOrNull(),
-                totalEpisodesLeft = (tracked["total_episodes_left"] ?: item?.get("total_episodes_left")).asIntOrNull(),
-            )
-        }.distinctBy { "${it.source}|${it.mediaType}|${it.mediaId}" }
-    }
 }
 
 @HiltViewModel
