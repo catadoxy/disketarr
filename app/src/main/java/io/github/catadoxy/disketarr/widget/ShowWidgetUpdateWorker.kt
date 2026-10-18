@@ -61,20 +61,9 @@ class ShowWidgetUpdateWorker(
             )
             views.setPendingIntentTemplate(R.id.widget_list, pending)
 
-            // Configure button opens the config activity for this widget.
-            val configIntent = Intent(applicationContext, ShowWidgetConfigActivity::class.java).apply {
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-            }
-            val configPending = PendingIntent.getActivity(
-                applicationContext,
-                id,
-                configIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
-            )
-            views.setOnClickPendingIntent(R.id.widget_configure, configPending)
-
             views.setViewVisibility(R.id.widget_empty, android.view.View.GONE)
             manager.updateAppWidget(id, views)
+            manager.notifyAppWidgetViewDataChanged(id, R.id.widget_list)
         }
         return Result.success()
     }

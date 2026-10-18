@@ -60,7 +60,7 @@ class ShowWidgetConfigActivity : ComponentActivity() {
                                 .putString("theme_$appWidgetId", theme)
                                 .putInt("bg_$appWidgetId", bg)
                                 .putBoolean("largefont_$appWidgetId", largeFont)
-                                .apply()
+                                .commit()
 
                             val updateIntent = Intent(this@ShowWidgetConfigActivity, ShowWidgetProvider::class.java).apply {
                                 action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
