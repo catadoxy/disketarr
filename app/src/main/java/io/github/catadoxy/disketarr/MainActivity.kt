@@ -36,11 +36,19 @@ class MainActivity : ComponentActivity() {
         _themeState.value = themeId
     }
 
+    private fun detailUriFromIntent(intent: Intent?): Uri? {
+        val source = intent?.getStringExtra("source") ?: return null
+        val type = intent.getStringExtra("media_type") ?: return null
+        val id = intent.getStringExtra("media_id") ?: return null
+        if (source.isBlank() || type.isBlank() || id.isBlank()) return null
+        return Uri.parse("disketarr://details/$source/$type/$id")
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         _themeState.value = settingsStore.selectedThemeId
-        pendingDeepLink = intent?.data
+        pendingDeepLink = intent?.data ?: detailUriFromIntent(intent)
 
         setContent {
             val currentThemeId by themeState.collectAsState()
@@ -58,6 +66,6 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        pendingDeepLink = intent.data
+        pendingDeepLink = intent.data ?: detailUriFromIntent(intent)
     }
 }
