@@ -92,10 +92,13 @@ class SettingsViewModel @Inject constructor(
                 val service = repository.service()
                 val available = mutableSetOf<String>()
                 for (type in LibraryMediaTypes.ALL) {
-                    val ok = runCatching {
-                        service.searchMedia(mediaType = type, query = "a", limit = 1)
-                    }.isSuccess
-                    if (ok) available += type
+                    val searchTotal = runCatching {
+                        service.searchMedia(mediaType = type, query = "a", limit = 1).pagination.total
+                    }.getOrDefault(0)
+                    val trackedTotal = runCatching {
+                        service.listTrackedMediaByTypeRaw(mediaType = type, limit = 1).asPaginationTotalOrNull() ?: 0
+                    }.getOrDefault(0)
+                    if (searchTotal > 0 || trackedTotal > 0) available += type
                 }
                 val finalAvailable = if (available.isEmpty()) LibraryMediaTypes.ALL.toSet() else available
                 settingsStore.saveAvailableCategories(finalAvailable)
