@@ -20,6 +20,7 @@ Built with Kotlin and Jetpack Compose against the Floppy REST API.
 - Offline cache (Room) for previously viewed pages
 - Daily upcoming-episode reminders (WorkManager) with configurable lead time
 - Deep links: `disketarr://details/{source}/{type}/{id}`
+- Home-screen widget with upcoming episodes (scrollable list)
 - Statistics split by Shows/Series and Movies
 - Categories filter (Movies/TV) to show/hide bottom tabs
 - Search recents + debounced typing
