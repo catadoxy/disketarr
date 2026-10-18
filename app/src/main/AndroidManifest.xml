@@ -48,7 +48,7 @@
 
         <activity
             android:name=".widget.ShowWidgetConfigActivity"
-            android:exported="false"
+            android:exported="true"
             android:theme="@style/Theme.DisketarrClient" />
     </application>
 </manifest>

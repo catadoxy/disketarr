@@ -54,13 +54,22 @@ class ShowWidgetConfigActivity : ComponentActivity() {
                     ConfigScreen(
                         onSave = { type, sort, theme, bg, largeFont ->
                             val prefs = getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
-                            prefs.edit()
+                            val committed = prefs.edit()
                                 .putString("type_$appWidgetId", type)
                                 .putString("sort_$appWidgetId", sort)
                                 .putString("theme_$appWidgetId", theme)
                                 .putInt("bg_$appWidgetId", bg)
                                 .putBoolean("largefont_$appWidgetId", largeFont)
                                 .commit()
+
+                            android.widget.Toast.makeText(
+                                this@ShowWidgetConfigActivity,
+                                if (committed) "Saved" else "Save failed",
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+
+                            val manager = AppWidgetManager.getInstance(this@ShowWidgetConfigActivity)
+                            manager.notifyAppWidgetViewDataChanged(appWidgetId, io.github.catadoxy.disketarr.R.id.widget_list)
 
                             val updateIntent = Intent(this@ShowWidgetConfigActivity, ShowWidgetProvider::class.java).apply {
                                 action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
