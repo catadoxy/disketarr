@@ -121,6 +121,10 @@ open class BrowseViewModel(
      *  history between the Shows and Anime tabs. */
     private var animeShowIds: Set<String>? = null
 
+    /** Cached set of tracked anime show media_ids (tmdb ids), used to filter
+     *  the calendar/upcoming feed by show type. */
+    private var animeShowMediaIds: Set<String>? = null
+
     private suspend fun animeShowIds(): Set<String> {
         animeShowIds?.let { return it }
         val ids = runCatching {
@@ -130,6 +134,21 @@ open class BrowseViewModel(
                 .toSet()
         }.getOrDefault(emptySet())
         animeShowIds = ids
+        return ids
+    }
+
+    private suspend fun animeShowMediaIds(): Set<String> {
+        animeShowMediaIds?.let { return it }
+        val ids = runCatching {
+            repository.service().listTrackedMediaRaw(mediaType = "anime", limit = 200)
+                .extractRowsSafely()
+                .mapNotNull { row ->
+                    row["item"].toStringKeyMapOrNull()?.get("media_id")?.toString()
+                }
+                .toSet()
+        }.getOrDefault(emptySet())
+        android.util.Log.d("DisketarrBrowse", "animeShowMediaIds fetched: ${ids.size}")
+        animeShowMediaIds = ids
         return ids
     }
 
@@ -264,9 +283,15 @@ open class BrowseViewModel(
                     }.orEmpty()
                 }
                 // The calendar is not media-type specific; keep shows only.
+                val animeIds = animeShowMediaIds()
                 Page(
                     items = items
                         .filter { it.mediaType == "episode" || it.mediaType == "tv" }
+                        .filter { item ->
+                            if (animeIds.isEmpty()) true
+                            else if (mediaType == "anime") item.mediaId in animeIds
+                            else item.mediaId !in animeIds
+                        }
                         .filter { airsOnOrAfter(it.nextEpisode?.airDate, today) }
                         .distinctBy { "${it.source}|${it.mediaId}|${it.nextEpisode?.seasonNumber}|${it.nextEpisode?.episodeNumber}" }
                         .sortedBy { it.nextEpisode?.airDate.orEmpty() },
