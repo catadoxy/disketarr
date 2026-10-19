@@ -190,7 +190,7 @@ open class BrowseViewModel(
                     _uiState.value = BrowseUiState(
                         tab = tab,
                         items = items,
-                        rails = page.rails,
+                        rails = page.rails.orEmpty(),
                         filter = _uiState.value.filter,
                         loading = false,
                         canLoadMore = page.hasMore,
@@ -220,7 +220,7 @@ open class BrowseViewModel(
         if (!force && offset == 0) {
             appCache.browse(cacheKey)?.let { cached ->
                 if (appCache.isFresh(cached.at)) {
-                    return@runCatching Page(cached.items, cached.rails, false)
+                    return@runCatching Page(cached.items.orEmpty(), cached.rails.orEmpty(), false)
                 }
             }
         }
@@ -321,7 +321,7 @@ open class BrowseViewModel(
         }
 
         if (offset == 0) {
-            appCache.putBrowse(cacheKey, page.items, page.rails)
+            appCache.putBrowse(cacheKey, page.items.orEmpty(), page.rails.orEmpty())
         }
         page
     }

@@ -117,10 +117,10 @@ fun BrowseScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
         when {
-            uiState.loading && uiState.items.isEmpty() && uiState.rails.isEmpty() ->
+            uiState.loading && uiState.items.orEmpty().isEmpty() && uiState.rails.orEmpty().isEmpty() ->
                 RefreshableEmpty("Loading…")
 
-            uiState.error != null && uiState.items.isEmpty() && uiState.rails.isEmpty() ->
+            uiState.error != null && uiState.items.orEmpty().isEmpty() && uiState.rails.orEmpty().isEmpty() ->
                 RefreshableError(uiState.error.orEmpty()) { viewModel.forceRefresh() }
 
             uiState.tab == BrowseTab.DISCOVER -> DiscoverRails(uiState.rails, onOpenDetail)
@@ -190,7 +190,7 @@ private fun emptyMessage(tab: BrowseTab): String = when (tab) {
 
 @Composable
 private fun DiscoverRails(rails: List<DiscoverRail>, onOpenDetail: (SearchResult) -> Unit) {
-    if (rails.isEmpty()) {
+    if (rails.orEmpty().isEmpty()) {
         AppEmptyState("Nothing to discover right now.", modifier = Modifier.fillMaxWidth())
         return
     }

@@ -213,12 +213,12 @@ class AppCacheRepository @Inject constructor(
 
     @Synchronized
     fun browse(key: String): Browse? {
-        val mem = browsePages[key]?.takeIf { it.items.isNotEmpty() || it.rails.isNotEmpty() }
+        val mem = browsePages[key]?.takeIf { (it.items?.isNotEmpty() == true) || (it.rails?.isNotEmpty() == true) }
         if (mem != null) return mem
         val scoped = "browse|${baseUrl ?: "default"}|$key"
         val payload = diskCache?.get(scoped) ?: return null
         val parsed = runCatching { browseAdapter.fromJson(payload) }.getOrNull() ?: return null
-        if (parsed.items.isEmpty() && parsed.rails.isEmpty()) return null
+        if (parsed.items.orEmpty().isEmpty() && parsed.rails.orEmpty().isEmpty()) return null
         browsePages[key] = parsed
         return parsed
     }

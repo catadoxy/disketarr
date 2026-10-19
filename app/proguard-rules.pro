@@ -7,7 +7,7 @@
 -dontwarn org.conscrypt.**
 
 # Moshi: generated JsonAdapter factories are referenced reflectively by name.
--keep class io.github.catadoxy.floppy.data.model.** { *; }
+-keep class io.github.catadoxy.disketarr.data.model.** { *; }
 -keepclasseswithmembers class * {
     @com.squareup.moshi.Json <fields>;
 }
@@ -24,7 +24,13 @@
 
 # Compose
 -keep class androidx.compose.runtime.** { *; }
+-keep class androidx.compose.ui.** { *; }
+-keep class androidx.compose.material3.** { *; }
+-keep class androidx.compose.foundation.** { *; }
 -dontwarn androidx.compose.**
+
+# ViewModels
+-keep class * extends androidx.lifecycle.ViewModel { *; }
 
 # Coil
 -keep class coil.** { *; }
