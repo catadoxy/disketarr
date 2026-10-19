@@ -301,7 +301,7 @@ open class BrowseViewModel(
                         year = filter.year,
                         // Documented as meaningful for TV/anime only; sending it
                         // for movies silently returns everything.
-                        progress = filter.progress?.takeIf { mediaType == "tv" },
+                        progress = filter.progress?.takeIf { mediaType == "tv" || mediaType == "anime" },
                         collection = filter.collection,
                         search = filter.query.takeIf { it.isNotBlank() },
                         sort = filter.sort ?: defaultSort(tab, mediaType),

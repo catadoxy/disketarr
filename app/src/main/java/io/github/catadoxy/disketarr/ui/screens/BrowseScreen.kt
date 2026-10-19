@@ -99,7 +99,7 @@ fun BrowseScreen(
             if (uiState.tab in FILTERABLE_TABS) {
                 FilterMenu(
                     filter = filter,
-                    showProgress = viewModel.mediaType == "tv",
+                    showProgress = viewModel.mediaType == "tv" || viewModel.mediaType == "anime",
                     onApply = viewModel::applyFilter,
                 )
             }
