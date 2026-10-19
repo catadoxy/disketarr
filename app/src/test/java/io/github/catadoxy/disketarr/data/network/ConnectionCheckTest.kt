@@ -128,7 +128,7 @@ class ConnectionCheckTest {
         override suspend fun getLists() = unsupported()
         override suspend fun getMediaDetail(mediaType: String, source: String, mediaId: String) = unsupported()
         override suspend fun listSeasonsRaw(mediaType: String, source: String, mediaId: String, limit: Int?) = unsupported()
-        override suspend fun listSeasonEpisodesRaw(mediaType: String, source: String, mediaId: String, seasonNumber: Int, limit: Int?) = unsupported()
+        override suspend fun listSeasonEpisodesRaw(mediaType: String, source: String, mediaId: String, seasonNumber: Int, limit: Int?, offset: Int?) = unsupported()
         override suspend fun markEpisodeWatched(mediaType: String, source: String, mediaId: String, seasonNumber: Int, episodeNumber: Int) = unsupported()
         override suspend fun unmarkEpisodeWatched(mediaType: String, source: String, mediaId: String, seasonNumber: Int, episodeNumber: Int) = unsupported()
         override suspend fun trackMedia(mediaType: String, request: io.github.catadoxy.disketarr.data.model.TrackMediaRequest) = unsupported()
