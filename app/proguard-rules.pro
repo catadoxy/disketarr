@@ -8,6 +8,9 @@
 
 # Moshi: generated JsonAdapter factories are referenced reflectively by name.
 -keep class io.github.catadoxy.disketarr.data.model.** { *; }
+-keepnames class io.github.catadoxy.disketarr.data.model.** { *; }
+-keep class io.github.catadoxy.disketarr.data.model.DiscoverRail { *; }
+-keep class io.github.catadoxy.disketarr.data.model.SearchResult { *; }
 -keepclasseswithmembers class * {
     @com.squareup.moshi.Json <fields>;
 }
