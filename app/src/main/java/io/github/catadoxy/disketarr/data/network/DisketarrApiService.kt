@@ -172,6 +172,7 @@ interface DisketarrApiService {
         @Path("media_id") mediaId: String,
         @Path("season_number") seasonNumber: Int,
         @Query("limit") limit: Int? = 100,
+        @Query("offset") offset: Int? = 0,
     ): Map<String, Any?>
 
     /** Marks one episode watched. Needs `watchlist:write`. */
