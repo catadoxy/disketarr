@@ -85,6 +85,6 @@ class MarkWatchedWorker(
 
 /** A `season`/`episode` row is tracked against its parent `tv` endpoint. */
 private fun widgetMediaType(mediaType: String): String = when (mediaType.lowercase()) {
-    "season", "episode" -> "tv"
+    "season", "episode", "anime" -> "tv"
     else -> mediaType
 }

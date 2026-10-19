@@ -409,6 +409,7 @@ internal fun Any?.asHistoryItems(mediaTypes: Set<String>): List<SearchResult> {
                     ?: row["show"].toStringKeyMapOrNull()?.get("image")?.toString()
                 )?.takeIf { !it.isNullOrBlank() },
             lastWatchedAt = row["played_at_local"]?.toString(),
+            showId = row["show"].toStringKeyMapOrNull()?.get("id")?.toString(),
             seriesTitle = (
                 row["show"].toStringKeyMapOrNull()?.get("title")
                     ?: item["series_name"]

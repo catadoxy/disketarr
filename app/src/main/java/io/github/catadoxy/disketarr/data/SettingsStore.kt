@@ -19,6 +19,7 @@ import java.util.UUID
  * plaintext prefs if the phone is ever compromised.
  */
 class SettingsStore(context: Context) {
+    private val appContext: Context = context.applicationContext
 
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -230,6 +231,21 @@ class SettingsStore(context: Context) {
             array.put(payload)
         }
         prefs.edit().putString(KEY_RECENT_MEDIA, array.toString()).apply()
+    }
+
+    /** Watched episode keys for shows whose episodes aren't tracked individually
+     *  (e.g. anime). Persisted so the watched state survives navigation. */
+    fun watchedEpisodeKeys(): Set<String> {
+        val set = appContext.getSharedPreferences("disketarr_watched_episodes", Context.MODE_PRIVATE)
+            .getStringSet("keys", emptySet()) ?: emptySet()
+
+        return set
+    }
+
+    fun setWatchedEpisodeKeys(keys: Set<String>) {
+        val ok = appContext.getSharedPreferences("disketarr_watched_episodes", Context.MODE_PRIVATE)
+            .edit().putStringSet("keys", keys).commit()
+
     }
 
     companion object {

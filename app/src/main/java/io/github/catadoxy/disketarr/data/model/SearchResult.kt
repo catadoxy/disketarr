@@ -36,6 +36,8 @@ data class SearchResult(
      * name. The widget shows this on the first line, like SeriesGuide.
      */
     @Json(ignore = true) val seriesTitle: String? = null,
+    /** Tracked show id for history rows, used to split history between tabs. */
+    @Json(ignore = true) val showId: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

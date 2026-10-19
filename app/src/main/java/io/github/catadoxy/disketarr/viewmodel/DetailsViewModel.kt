@@ -42,6 +42,13 @@ val DetailsUiState.Success?.nextEpisode: SeasonEpisode?
 internal fun isShowMediaType(mediaType: String): Boolean =
     mediaType.lowercase() in setOf("tv", "anime")
 
+private fun episodeKey(mediaType: String, source: String, mediaId: String, season: Int, episode: Int): String =
+    "${apiMediaType(mediaType)}|$source|$mediaId|$season|$episode"
+
+/** Floppy's seasons/episodes/watch endpoints only accept "tv" (even for anime). */
+internal fun apiMediaType(mediaType: String): String =
+    if (mediaType.lowercase() == "anime") "tv" else mediaType
+
 fun buildTrackRequest(
     mediaType: String,
     source: String,
@@ -91,6 +98,10 @@ class DetailsViewModel @Inject constructor(
     private val repository: DisketarrRepository = DisketarrRepository(settingsStore),
     private val appCache: AppCacheRepository = AppCacheRepository(),
 ) : ViewModel() {
+    /** Local record of watched episodes for shows whose episodes aren't tracked
+     *  individually (e.g. anime), so the checkbox survives navigation/reload. */
+    private val watchedEpisodeKeys: MutableSet<String> =
+        settingsStore.watchedEpisodeKeys().toMutableSet()
 
     private val _uiState = MutableStateFlow<DetailsUiState>(DetailsUiState.Loading)
     val uiState: StateFlow<DetailsUiState> = _uiState.asStateFlow()
@@ -110,12 +121,19 @@ class DetailsViewModel @Inject constructor(
         // Opening a title you have already viewed costs nothing.
         appCache.details(cacheKey)?.let { cached ->
             if (appCache.isFresh(cached.at)) {
+                // Apply locally tracked watched state (needed for shows whose
+                // episodes aren't tracked individually, e.g. anime).
+                val episodes = cached.episodes.map { ep ->
+                    val key = episodeKey(mediaType, source, mediaId, ep.seasonNumber ?: cached.selectedSeason ?: 1, ep.episodeNumber)
+                    if (ep.watched) ep else ep.copy(watched = watchedEpisodeKeys.contains(key))
+                }
                 _uiState.value = DetailsUiState.Success(
                     detail = cached.detail,
                     seasons = cached.seasons,
                     selectedSeason = cached.selectedSeason,
-                    episodes = cached.episodes,
+                    episodes = episodes,
                 )
+
                 return
             }
         }
@@ -167,8 +185,9 @@ class DetailsViewModel @Inject constructor(
         source: String,
         mediaId: String,
     ): Triple<List<SeasonSummary>, Int?, List<SeasonEpisode>> {
+        val apiType = apiMediaType(mediaType)
         val summaries = runCatching {
-            service.listSeasonsRaw(mediaType = mediaType, source = source, mediaId = mediaId).asSeasonSummaries()
+            service.listSeasonsRaw(mediaType = apiMediaType(mediaType), source = source, mediaId = mediaId).asSeasonSummaries()
         }.getOrElse { emptyList() }.let { seasons ->
             if (settingsStore.hideSpecialEpisodes) seasons.filter { it.seasonNumber != 0 } else seasons
         }
@@ -178,12 +197,15 @@ class DetailsViewModel @Inject constructor(
 
         val episodes = runCatching {
             service.listSeasonEpisodesRaw(
-                mediaType = mediaType,
+                mediaType = apiType,
                 source = source,
                 mediaId = mediaId,
                 seasonNumber = selected,
             ).asSeasonEpisodes(fallbackSeason = selected)
-        }.getOrElse { emptyList() }
+        }.getOrElse { emptyList() }.map { ep ->
+            val key = episodeKey(mediaType, source, mediaId, ep.seasonNumber ?: selected, ep.episodeNumber)
+            if (ep.watched) ep else ep.copy(watched = watchedEpisodeKeys.contains(key))
+        }
 
         return Triple(summaries, selected, episodes)
     }
@@ -241,6 +263,7 @@ class DetailsViewModel @Inject constructor(
         mediaId: String,
         episode: SeasonEpisode,
     ) {
+
         val season = episode.seasonNumber ?: (uiState.value as? DetailsUiState.Success)?.selectedSeason
         if (season == null) {
             _actionMessage.value = "Could not tell which season this episode belongs to."
@@ -251,10 +274,11 @@ class DetailsViewModel @Inject constructor(
             try {
                 withContext(Dispatchers.IO) {
                     val service = repository.service()
+                    val apiType = apiMediaType(mediaType)
                     val response = if (episode.watched) {
-                        service.unmarkEpisodeWatched(mediaType, source, mediaId, season, episode.episodeNumber)
+                        service.unmarkEpisodeWatched(apiType, source, mediaId, season, episode.episodeNumber)
                     } else {
-                        service.markEpisodeWatched(mediaType, source, mediaId, season, episode.episodeNumber)
+                        service.markEpisodeWatched(apiType, source, mediaId, season, episode.episodeNumber)
                     }
 
                     if (!response.isSuccessful) {
@@ -272,9 +296,23 @@ class DetailsViewModel @Inject constructor(
                         "Watched ${episode.code}"
                     }
 
-                    val episodes = service.listSeasonEpisodesRaw(mediaType, source, mediaId, season).asSeasonEpisodes(fallbackSeason = season)
+                    val key = episodeKey(mediaType, source, mediaId, season, episode.episodeNumber)
+                    if (episode.watched) watchedEpisodeKeys.remove(key) else watchedEpisodeKeys.add(key)
+                    settingsStore.setWatchedEpisodeKeys(watchedEpisodeKeys)
+
+                    val newWatched = !episode.watched
+                    val episodes = service.listSeasonEpisodesRaw(apiType, source, mediaId, season).asSeasonEpisodes(fallbackSeason = season)
                     val latest = _uiState.value as? DetailsUiState.Success ?: return@withContext
-                    _uiState.value = latest.copy(episodes = episodes, selectedSeason = season)
+                    // Episodes for some shows (e.g. anime) are not tracked
+                    // individually, so the server returns a null status and the
+                    // reload would leave the checkbox unchanged. Preserve the
+                    // state the API just accepted so the UI reflects the tap.
+                    val merged = episodes.map { ep ->
+                        if (ep.seasonNumber == season && ep.episodeNumber == episode.episodeNumber) {
+                            ep.copy(watched = newWatched)
+                        } else ep
+                    }
+                    _uiState.value = latest.copy(episodes = merged, selectedSeason = season)
                     // A write changes the item and the lists that contain it.
                     appCache.invalidateAfterWrite(appCache.detailKey(mediaType, source, mediaId))
                     appCache.putEpisodes(appCache.detailKey(mediaType, source, mediaId), episodes, season)

@@ -117,12 +117,28 @@ open class BrowseViewModel(
     private val pageSize = 60
     private val historyPageSize = 30
 
+    /** Cached set of tracked anime show ids (the `id` field), used to split
+     *  history between the Shows and Anime tabs. */
+    private var animeShowIds: Set<String>? = null
+
+    private suspend fun animeShowIds(): Set<String> {
+        animeShowIds?.let { return it }
+        val ids = runCatching {
+            repository.service().listTrackedMediaRaw(mediaType = "anime", limit = 200)
+                .extractRowsSafely()
+                .mapNotNull { it["id"]?.toString() }
+                .toSet()
+        }.getOrDefault(emptySet())
+        animeShowIds = ids
+        return ids
+    }
+
     private val _uiState = MutableStateFlow(BrowseUiState(tab = tabs.first()))
     val uiState: StateFlow<BrowseUiState> = _uiState.asStateFlow()
 
     /** History rows are episodic for shows, so keep the show's parts together. */
     private val historyTypes: Set<String> =
-        if (mediaType == "tv") setOf("tv", "season", "episode") else setOf(mediaType)
+        if (mediaType == "movie") setOf("movie") else setOf("tv", "season", "episode")
 
     init {
         _uiState.value = BrowseUiState(tab = tabs.first(), filter = loadSavedFilter())
@@ -278,7 +294,13 @@ open class BrowseViewModel(
                     val raw = withTimeoutOrNull(25000) {
                         service.listHistoryRaw(limit = historyPageSize, offset = offset, flat = "1")
                     }
-                    val items = raw.asHistoryItems(historyTypes)
+                    val animeIds = animeShowIds()
+                    val items = raw.asHistoryItems(historyTypes).filter { item ->
+                        // Split episodic history between Shows and Anime tabs.
+                        val showId = item.showId
+                        if (showId == null || animeIds.isEmpty()) return@filter true
+                        if (mediaType == "anime") showId in animeIds else showId !in animeIds
+                    }
                     val rawCount = raw.extractRowsSafely().size
                     Page(items = items, hasMore = rawCount >= historyPageSize)
                 }
