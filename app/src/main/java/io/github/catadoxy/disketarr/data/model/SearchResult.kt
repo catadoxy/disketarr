@@ -26,9 +26,16 @@ data class SearchResult(
     @Json(name = "progress") val progress: Double? = null,
     @Json(name = "score") val score: Double? = null,
     @Json(name = "next_episode") val nextEpisode: NextEpisode? = null,
+    /** First studio/broadcaster; the widget shows it as the channel next to the air time. */
+    @Json(name = "studio") val studio: String? = null,
     /** Released episodes not yet watched - drives the "N remaining" row label. */
     @Json(name = "episodes_left") val episodesLeft: Int? = null,
     @Json(name = "total_episodes_left") val totalEpisodesLeft: Int? = null,
+    /**
+     * Parent show title for history/episode rows, whose [title] is the episode
+     * name. The widget shows this on the first line, like SeriesGuide.
+     */
+    @Json(ignore = true) val seriesTitle: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

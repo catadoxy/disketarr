@@ -37,6 +37,8 @@ data class SeasonSummary(
      * this null, so it cannot be relied on for the season's size.
      */
     val totalEpisodesLeft: Int? = null,
+    /** Next episode to watch in this season, when Floppy reports one. */
+    val nextEpisode: NextEpisode? = null,
 ) {
     /** Watched + aired-but-unwatched: the episodes that actually exist to watch. */
     val airedEpisodes: Int?

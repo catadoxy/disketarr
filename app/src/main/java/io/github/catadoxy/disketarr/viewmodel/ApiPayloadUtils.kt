@@ -84,6 +84,13 @@ internal fun Any?.toStringKeyMapOrNull(): Map<String, Any?>? {
     return out
 }
 
+/** First studio/broadcaster from a raw `item` map; the widget renders it as the channel. */
+private fun studioOf(item: Map<String, Any?>?): String? =
+    (item?.get("studios") as? List<*>)
+        ?.firstOrNull()
+        ?.toString()
+        ?.takeIf { it.isNotBlank() }
+
 private fun isRowCandidate(map: Map<String, Any?>): Boolean {
     return map["media_id"] != null ||
         map["item_id"] != null ||
@@ -133,6 +140,7 @@ internal fun Any?.asSeasonSummaries(): List<SeasonSummary> =
                 progress = row["progress"].asIntOrNull(),
                 episodesLeft = row["episodes_left"].asIntOrNull(),
                 totalEpisodesLeft = row["total_episodes_left"].asIntOrNull(),
+                nextEpisode = row["next_episode"].asNextEpisodeOrNull(),
             )
         }
         .distinctBy { it.seasonNumber }
@@ -324,6 +332,7 @@ internal fun Any?.asUpcomingItems(): List<SearchResult> {
             title = item["title"]?.toString()?.takeIf { it.isNotBlank() },
             image = item["image"]?.toString()?.takeIf { it.isNotBlank() },
             lastWatchedAt = airDate,
+            studio = studioOf(item),
             nextEpisode = NextEpisode(
                 seasonNumber = seasonNumber,
                 episodeNumber = episodeNumber,
@@ -361,8 +370,14 @@ internal fun Any?.asHistoryItems(mediaTypes: Set<String>): List<SearchResult> {
 
     // Floppy can return either a flat list (`flat=1`) or day-grouped buckets.
     // Accept both so a missed/ignored `flat` parameter does not empty the tab.
-    val rows: List<*> = (root["results"] as? List<*>)
+    val topRows: List<*> = (root["results"] as? List<*>)
         ?: root.values.filterIsInstance<List<*>>().flatten()
+
+    // Day-grouped history wraps entries as {date, weekday, entries:[...]}.
+    val rows: List<*> = topRows.flatMap { candidate ->
+        val bucket = candidate.toStringKeyMapOrNull()
+        (bucket?.get("entries") as? List<*>) ?: listOf(candidate)
+    }
 
     return rows.mapNotNull { rowAny ->
         val row = rowAny.toStringKeyMapOrNull() ?: return@mapNotNull null
@@ -394,6 +409,11 @@ internal fun Any?.asHistoryItems(mediaTypes: Set<String>): List<SearchResult> {
                     ?: row["show"].toStringKeyMapOrNull()?.get("image")?.toString()
                 )?.takeIf { !it.isNullOrBlank() },
             lastWatchedAt = row["played_at_local"]?.toString(),
+            seriesTitle = (
+                row["show"].toStringKeyMapOrNull()?.get("title")
+                    ?: item["series_name"]
+                )?.toString()?.takeIf { it.isNotBlank() },
+            studio = studioOf(item),
             nextEpisode = NextEpisode(
                 seasonNumber = season,
                 episodeNumber = episode,
@@ -468,6 +488,7 @@ internal fun List<Map<String, Any?>>.toSearchResults(): List<SearchResult> {
             progress = (tracked["progress"] ?: item?.get("progress")).asDoubleOrNull(),
             score = (tracked["score"] ?: item?.get("score")).asDoubleOrNull(),
             nextEpisode = (tracked["next_episode"] ?: item?.get("next_episode")).asNextEpisodeOrNull(),
+            studio = studioOf(item),
             episodesLeft = (tracked["episodes_left"] ?: item?.get("episodes_left")).asIntOrNull(),
             totalEpisodesLeft = (tracked["total_episodes_left"] ?: item?.get("total_episodes_left")).asIntOrNull(),
         )

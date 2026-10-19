@@ -1,18 +1,34 @@
 package io.github.catadoxy.disketarr.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import io.github.catadoxy.disketarr.R
 import io.github.catadoxy.disketarr.data.SettingsStore
 import io.github.catadoxy.disketarr.data.model.SearchResult
 import io.github.catadoxy.disketarr.data.network.ApiClient
+import io.github.catadoxy.disketarr.data.network.DisketarrApiService
 import io.github.catadoxy.disketarr.viewmodel.asHistoryItems
+import io.github.catadoxy.disketarr.viewmodel.asSeasonEpisodes
+import io.github.catadoxy.disketarr.viewmodel.asSeasonSummaries
 import io.github.catadoxy.disketarr.viewmodel.asUpcomingItems
 import io.github.catadoxy.disketarr.viewmodel.extractRowsSafely
 import io.github.catadoxy.disketarr.viewmodel.toSearchResults
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 
 class ShowWidgetFactory(
@@ -20,31 +36,53 @@ class ShowWidgetFactory(
     intent: Intent,
 ) : RemoteViewsService.RemoteViewsFactory {
 
-    private val appWidgetId = intent.getIntExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_ID, android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID)
-    private val items = mutableListOf<SearchResult>()
+    private class Row(val item: SearchResult, val poster: Bitmap?)
 
-    override fun onCreate() {
-        onDataSetChanged()
-    }
+    private val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+    private val rows = mutableListOf<Row>()
 
+    override fun onCreate() = Unit
+
+    /**
+     * Fetches the rows and downloads their posters. `RemoteViewsFactory` has no
+     * way to signal "data ready" later, so this blocks (as it did before); poster
+     * downloads are memory-cached and time-limited to keep it short.
+     */
     override fun onDataSetChanged() {
-        items.clear()
+        rows.clear()
         val settings = SettingsStore(context)
         if (!settings.isConfigured) return
 
         val prefs = context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
         val type = prefs.getString("type_$appWidgetId", "upcoming") ?: "upcoming"
         val sort = prefs.getString("sort_$appWidgetId", "latest") ?: "latest"
+        val filter = prefs.getString("filter_$appWidgetId", "active") ?: "active"
+        val posterSize = prefs.getString("postersize_$appWidgetId", "medium") ?: "medium"
 
+        rows.addAll(loadRows(settings, type, sort, filter, posterSize))
+    }
+
+    private fun loadRows(settings: SettingsStore, type: String, sort: String, filter: String, posterSize: String): List<Row> {
         val today = LocalDate.now()
         val fetched: List<SearchResult> = runCatching {
             runBlocking {
                 val service = ApiClient.getService(settings)
                 when (type) {
-                    "recent" -> service.listHistoryRaw(limit = 30, flat = "1")
+                    // The flat list costs the server ~10s to aggregate (history is
+                    // thousands of entries); the widget's update window aborts that
+                    // request. Day buckets answer in well under a second.
+                    "recent" -> service.listHistory(limit = 30)
                         .asHistoryItems(setOf("tv", "season", "episode"))
-                    "shows" -> service.listTrackedMediaRaw(mediaType = "tv", limit = 50)
-                        .extractRowsSafely().toSearchResults()
+                    "shows" -> service.listTrackedMediaRaw(
+                        mediaType = "tv",
+                        statuses = when (filter) {
+                            "inprogress" -> listOf("1")
+                            "planned" -> listOf("0")
+                            "all" -> null
+                            else -> listOf("0", "1")
+                        },
+                        limit = 20,
+                    ).extractRowsSafely().toSearchResults()
                     else -> service.upcomingCalendar(month = today.monthValue, year = today.year, limit = 20)
                         .asUpcomingItems()
                         .filter { item ->
@@ -56,42 +94,161 @@ class ShowWidgetFactory(
             }
         }.getOrDefault(emptyList())
 
+        // Shows need the season data before sorting: the list endpoint returns
+        // no next_episode (and therefore no air date) for library shows.
+        val prepared = if (type == "shows") enrichShows(settings, fetched) else fetched
+
         val sorted = when (sort) {
-            "title" -> fetched.sortedBy { it.title.orEmpty() }
-            "oldest" -> fetched.sortedBy { it.nextEpisode?.airDate.orEmpty() }
-            "lastwatched" -> fetched.sortedByDescending { it.lastWatchedAt.orEmpty() }
-            "remaining" -> fetched.sortedByDescending { it.episodesLeft ?: 0 }
-            else -> fetched.sortedBy { it.nextEpisode?.airDate.orEmpty() }
+            "title" -> prepared.sortedBy { it.title.orEmpty().lowercase() }
+            // Shows with a next episode come first; fully watched shows have no
+            // episode date and would otherwise outrank in-progress shows with
+            // their (older) last-watched timestamps.
+            "oldest" -> prepared.sortedWith(
+                compareBy<SearchResult> { it.nextEpisode == null }
+                    .thenBy { it.episodeOrWatchDate() },
+            )
+            "lastwatched" -> prepared.sortedByDescending { it.lastWatchedAt.orEmpty() }
+            "remaining" -> prepared.sortedByDescending { it.episodesLeft ?: 0 }
+            else -> prepared.sortedWith(
+                compareByDescending<SearchResult> { it.nextEpisode != null }
+                    .thenByDescending { it.episodeOrWatchDate() },
+            )
         }
 
-        items.addAll(sorted.take(10))
+        return sorted.take(MAX_ROWS).map { item -> Row(item, WidgetImages.load(item.image)) }
     }
 
-    override fun getCount(): Int = items.size
+    /**
+     * The tracked-media list omits `next_episode` for library shows; only the
+     * season rows carry it, and they leave `air_date` empty for already-aired
+     * episodes. This fills both in (one seasons call plus one episodes call per
+     * show, run concurrently) so date sorts and the row's episode date are real.
+     */
+    private fun enrichShows(settings: SettingsStore, items: List<SearchResult>): List<SearchResult> =
+        runCatching {
+            runBlocking {
+                val service = ApiClient.getService(settings)
+                coroutineScope {
+                    items.map { item ->
+                        async(Dispatchers.IO) { enrichShow(service, item) }
+                    }.awaitAll()
+                }
+            }
+        }.getOrDefault(items)
+
+    private suspend fun enrichShow(service: DisketarrApiService, item: SearchResult): SearchResult {
+        val known = item.nextEpisode
+        val next = if (known?.seasonNumber != null && known.episodeNumber != null) {
+            known
+        } else {
+            runCatching {
+                service.listSeasonsRaw(item.mediaType, item.source, item.mediaId)
+                    .asSeasonSummaries()
+                    .mapNotNull { it.nextEpisode }
+                    .firstOrNull()
+            }.getOrNull() ?: return item
+        }
+
+        val season = next.seasonNumber ?: return item.copy(nextEpisode = next)
+        val number = next.episodeNumber ?: return item.copy(nextEpisode = next)
+        if (next.airDate != null) return item.copy(nextEpisode = next)
+
+        val airDate = runCatching {
+            service.listSeasonEpisodesRaw(item.mediaType, item.source, item.mediaId, season)
+                .asSeasonEpisodes(season)
+                .firstOrNull { it.episodeNumber == number }
+                ?.airDate
+        }.getOrNull()
+
+        return item.copy(nextEpisode = if (airDate == null) next else next.copy(airDate = airDate))
+    }
+
+    override fun getCount(): Int = rows.size
 
     override fun getViewAt(position: Int): RemoteViews {
-        val item = items[position]
-        val views = RemoteViews(context.packageName, R.layout.widget_list_item)
+        val row = rows[position]
+        val item = row.item
         val prefs = context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
+        val type = prefs.getString("type_$appWidgetId", "upcoming") ?: "upcoming"
         val largeFont = prefs.getBoolean("largefont_$appWidgetId", false)
-        val titleSize = if (largeFont) 16f else 13f
-        val subtitleSize = if (largeFont) 13f else 11f
-        views.setTextViewText(R.id.item_title, item.title ?: "Untitled")
-        views.setFloat(R.id.item_title, "setTextSize", titleSize)
-        val subtitle = listOfNotNull(
-            item.nextEpisode?.let { "S${it.seasonNumber ?: 1}E${it.episodeNumber}" },
-            item.nextEpisode?.airDate?.take(10),
-        ).joinToString(" · ")
-        views.setTextViewText(R.id.item_subtitle, subtitle)
-        views.setFloat(R.id.item_subtitle, "setTextSize", subtitleSize)
+        val posterSize = prefs.getString("postersize_$appWidgetId", "medium") ?: "medium"
+        val isDark = isWidgetDark(context, appWidgetId)
+        val bgOpacity = prefs.getInt("bg_$appWidgetId", 100)
 
-        val fillInIntent = Intent().apply {
-            putExtra("source", item.source)
-            putExtra("media_type", item.mediaType)
-            putExtra("media_id", item.mediaId)
+        val layoutId = when (posterSize) {
+            "small" -> R.layout.widget_list_item_small
+            "medium" -> R.layout.widget_list_item_medium
+            else -> R.layout.widget_list_item
         }
-        views.setOnClickFillInIntent(R.id.item_root, fillInIntent)
+        val views = RemoteViews(context.packageName, layoutId)
+        val rowBg = if (bgOpacity == 0) 0x00000000 else if (isDark) DARK_ROW else LIGHT_ROW
+        views.setInt(R.id.item_root, "setBackgroundColor", rowBg)
+
+        val (targetW, targetH) = when (posterSize) {
+            "small" -> 32 to 45
+            "large" -> 58 to 80
+            else -> 46 to 64
+        }
+        if (row.poster != null) {
+            val scaled = android.graphics.Bitmap.createScaledBitmap(row.poster, targetW, targetH, true)
+            views.setImageViewBitmap(R.id.item_poster, scaled)
+        } else {
+            views.setImageViewResource(R.id.item_poster, android.R.drawable.ic_menu_gallery)
+        }
+
+        val primary = if (isDark) DARK_PRIMARY else LIGHT_PRIMARY
+        val secondary = if (isDark) DARK_SECONDARY else LIGHT_SECONDARY
+
+        // History rows carry the episode name in `title`; lead with the show.
+        views.setTextViewText(R.id.item_title, item.seriesTitle ?: item.title ?: "Untitled")
+        views.setFloat(R.id.item_title, "setTextSize", if (largeFont) 16f else 14f)
+        views.setTextColor(R.id.item_title, primary)
+
+        val moment = parseMoment(item.nextEpisode?.airDate ?: item.lastWatchedAt)
+        // Library episodes report a midnight placeholder rather than a real air
+        // time, so shows only show the channel; upcoming keeps its air time.
+        val meta = listOfNotNull(
+            item.studio?.takeIf { it.isNotBlank() },
+            moment?.takeIf { type != "shows" }?.let { TIME_FORMAT.format(it) },
+        ).joinToString(" · ")
+        views.setTextViewText(R.id.item_meta, meta)
+        views.setFloat(R.id.item_meta, "setTextSize", if (largeFont) 13f else 12f)
+        views.setTextColor(R.id.item_meta, secondary)
+
+        views.setTextViewText(R.id.item_episode, episodeLabel(item).orEmpty())
+        views.setFloat(R.id.item_episode, "setTextSize", if (largeFont) 14f else 13f)
+        views.setTextColor(R.id.item_episode, primary)
+
+        views.setTextViewText(R.id.item_date, moment?.let { formatDate(it) }.orEmpty())
+        views.setFloat(R.id.item_date, "setTextSize", if (largeFont) 13f else 12f)
+        views.setTextColor(R.id.item_date, secondary)
+
+        views.setInt(R.id.item_check, "setColorFilter", primary)
+        val markable = item.nextEpisode?.seasonNumber != null && item.nextEpisode?.episodeNumber != null
+        views.setViewVisibility(R.id.item_check, if (markable) View.VISIBLE else View.INVISIBLE)
+
+        // Both the row content and the checkmark carry their own fill-in intent;
+        // the host combines whichever view was tapped with the collection's
+        // template. They must be siblings - a child inside the tappable content
+        // never receives its own action.
+        views.setOnClickFillInIntent(R.id.item_content, fillInIntent(item, WidgetActionReceiver.ACTION_OPEN))
+        if (markable) {
+            views.setOnClickFillInIntent(
+                R.id.item_check,
+                fillInIntent(item, WidgetActionReceiver.ACTION_MARK_WATCHED),
+            )
+        }
         return views
+    }
+
+    private fun fillInIntent(item: SearchResult, action: String): Intent = Intent().apply {
+        putExtra(WidgetActionReceiver.EXTRA_ACTION, action)
+        putExtra(WidgetActionReceiver.EXTRA_APPWIDGET_ID, appWidgetId)
+        putExtra(WidgetActionReceiver.EXTRA_SOURCE, item.source)
+        putExtra(WidgetActionReceiver.EXTRA_MEDIA_TYPE, item.mediaType)
+        putExtra(WidgetActionReceiver.EXTRA_MEDIA_ID, item.mediaId)
+        putExtra(WidgetActionReceiver.EXTRA_SEASON, item.nextEpisode?.seasonNumber ?: -1)
+        putExtra(WidgetActionReceiver.EXTRA_EPISODE, item.nextEpisode?.episodeNumber ?: -1)
     }
 
     override fun getLoadingView(): RemoteViews? = null
@@ -103,6 +260,69 @@ class ShowWidgetFactory(
     override fun hasStableIds(): Boolean = false
 
     override fun onDestroy() {
-        items.clear()
+        rows.clear()
+    }
+
+    private companion object {
+        const val MAX_ROWS = 10
+        const val LIGHT_ROW = 0xFFF3F4F6.toInt()
+        const val DARK_ROW = 0xFF374151.toInt()
+        const val LIGHT_PRIMARY = 0xFF111827.toInt()
+        const val DARK_PRIMARY = 0xFFF9FAFB.toInt()
+        const val LIGHT_SECONDARY = 0xFF6B7280.toInt()
+        const val DARK_SECONDARY = 0xFF9CA3AF.toInt()
     }
 }
+
+private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+private val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault())
+private val DATE_WITH_YEAR_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM yyyy", Locale.getDefault())
+
+/**
+ * Disketarr reports a placeholder `0001-01-01` air date for episodes with no
+ * known release date, and tracked shows often omit `next_episode` entirely.
+ * Treat both as "no date" so date-based sorts fall back to the last-watched
+ * timestamp instead of collapsing into the API's original order.
+ */
+private fun String?.validDateOrNull(): String? {
+    val text = this?.take(10)?.trim().orEmpty()
+    return text.takeIf { it.isNotBlank() && it != "0001-01-01" }
+}
+
+/** Episode air date when known, otherwise the last-watched date, otherwise empty. */
+private fun SearchResult.episodeOrWatchDate(): String =
+    nextEpisode?.airDate.validDateOrNull()
+        ?: lastWatchedAt.validDateOrNull()
+        ?: ""
+
+/** "2x03 Purpose" - the episode code plus title when either is available. */
+private fun episodeLabel(item: SearchResult): String? {
+    val episode = item.nextEpisode ?: return null
+    val season = episode.seasonNumber
+    val number = episode.episodeNumber
+    val code = when {
+        season != null && number != null -> "${season}x${number.toString().padStart(2, '0')}"
+        !episode.episodeCode.isNullOrBlank() -> episode.episodeCode
+        else -> null
+    }
+    val title = episode.title?.takeIf { it.isNotBlank() }
+    return listOfNotNull(code, title).joinToString(" ").takeIf { it.isNotBlank() }
+}
+
+private fun parseMoment(raw: String?): ZonedDateTime? {
+    val text = raw?.takeIf { it.isNotBlank() && !it.startsWith("0001-01-01") } ?: return null
+    runCatching { OffsetDateTime.parse(text) }.getOrNull()?.let {
+        return it.atZoneSameInstant(ZoneId.systemDefault())
+    }
+    runCatching { LocalDateTime.parse(text) }.getOrNull()?.let {
+        return it.atZone(ZoneId.systemDefault())
+    }
+    return null
+}
+
+private fun formatDate(moment: ZonedDateTime): String =
+    if (moment.year == LocalDate.now().year) {
+        DATE_FORMAT.format(moment)
+    } else {
+        DATE_WITH_YEAR_FORMAT.format(moment)
+    }
