@@ -125,14 +125,20 @@ fun DetailsScreen(
     source: String,
     mediaType: String,
     mediaId: String,
+    /**
+     * The Floppy library this title is shown from. A title can be tracked in
+     * the TV and in the Anime library at once, each with its own status and
+     * progress, so the screen has to say which copy it means.
+     */
+    library: String = "",
 ) {
     val viewModel: DetailsViewModel = hiltViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val actionMessage by viewModel.actionMessage.collectAsStateWithLifecycle()
     val lastActionMessage = actionMessage
 
-    LaunchedEffect(source, mediaType, mediaId) {
-        viewModel.load(source, mediaType, mediaId)
+    LaunchedEffect(source, mediaType, mediaId, library) {
+        viewModel.load(source, mediaType, mediaId, library)
     }
 
     when (val state = uiState) {

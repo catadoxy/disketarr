@@ -89,9 +89,9 @@ fun SettingsScreen(
 
     LaunchedEffect(Unit) { viewModel.checkAvailableCategories() }
     LaunchedEffect(availableCategories) {
-        selectedCategories = selectedCategories.intersect(availableCategories)
-        if (selectedCategories.isEmpty()) selectedCategories = availableCategories
-        viewModel.settingsStore.saveSelectedCategories(selectedCategories)
+        // The selection stays the user's choice: a category that Floppy does
+        // not have is simply not shown, and it comes back when it does.
+        selectedCategories = viewModel.settingsStore.selectedCategories()
     }
 
     var baseUrl by remember { mutableStateOf(viewModel.baseUrl) }

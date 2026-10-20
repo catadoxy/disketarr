@@ -79,7 +79,7 @@ private val SORT_OPTIONS = listOf(
 fun BrowseScreen(
     viewModel: BrowseViewModel,
     title: String,
-    onOpenDetail: (SearchResult) -> Unit,
+    onOpenDetail: (SearchResult, String) -> Unit,
     onOpenSearch: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -123,7 +123,7 @@ fun BrowseScreen(
             uiState.error != null && uiState.items.orEmpty().isEmpty() && uiState.rails.orEmpty().isEmpty() ->
                 RefreshableError(uiState.error.orEmpty()) { viewModel.forceRefresh() }
 
-            uiState.tab == BrowseTab.DISCOVER -> DiscoverRails(uiState.rails, onOpenDetail)
+            uiState.tab == BrowseTab.DISCOVER -> DiscoverRails(uiState.rails, onOpenDetail, viewModel.mediaType)
 
             uiState.items.isEmpty() ->
                 RefreshableEmpty(emptyMessage(uiState.tab))
@@ -136,7 +136,7 @@ fun BrowseScreen(
                 // times. Keying by source/type/id alone collides and crashes the
                 // list, so include the position.
                 itemsIndexed(uiState.items) { _, item ->
-                    MediaRow(item = item, onClick = { onOpenDetail(item) })
+                    MediaRow(item = item, onClick = { onOpenDetail(item, item.libraryMediaType ?: viewModel.mediaType) })
                 }
                 if (uiState.canLoadMore) {
                     item {
@@ -189,7 +189,12 @@ private fun emptyMessage(tab: BrowseTab): String = when (tab) {
 }
 
 @Composable
-private fun DiscoverRails(rails: List<DiscoverRail>, onOpenDetail: (SearchResult) -> Unit) {
+private fun DiscoverRails(
+    rails: List<DiscoverRail>,
+    onOpenDetail: (SearchResult, String) -> Unit,
+    /** The library a catalog hit is filed in when it is tracked. */
+    fallbackLibrary: String,
+) {
     if (rails.orEmpty().isEmpty()) {
         AppEmptyState("Nothing to discover right now.", modifier = Modifier.fillMaxWidth())
         return
@@ -221,7 +226,7 @@ private fun DiscoverRails(rails: List<DiscoverRail>, onOpenDetail: (SearchResult
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(rail.items, key = { "${it.source}|${it.mediaId}" }) { item ->
-                        PosterCard(item = item, onClick = { onOpenDetail(item) })
+                        PosterCard(item = item, onClick = { onOpenDetail(item, item.libraryMediaType ?: fallbackLibrary) })
                     }
                 }
             }

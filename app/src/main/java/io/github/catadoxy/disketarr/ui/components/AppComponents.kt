@@ -256,7 +256,9 @@ internal fun metaLine(item: SearchResult): String {
             else -> Unit
         }
         item.score?.takeIf { it > 0.0 }?.let { add(String.format(Locale.US, "%.1f ★", it)) }
-        add(mediaTypeLabel(item.mediaType))
+        // The library is what the user is looking at: an anime from TMDB is a
+        // "tv" item, but it belongs to the Anime library.
+        add(mediaTypeLabel(item.libraryMediaType ?: item.mediaType))
     }
     return parts.joinToString(" · ")
 }
@@ -304,7 +306,9 @@ internal fun statusLabel(status: Int?): String =
 
 internal fun mediaTypeLabel(type: String): String = when (type.lowercase()) {
     "all" -> "All"
-    "tv" -> "TV"
+    // The TV Seasons library holds per-season tracking of TV shows, so a row
+    // from it is still a TV show.
+    "tv", "season" -> "TV"
     "boardgame", "board_game" -> "Board Game"
     "comicissue" -> "Comic Issue"
     else -> type.replaceFirstChar { it.uppercase() }

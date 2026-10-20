@@ -9,7 +9,12 @@ import android.widget.Toast
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import io.github.catadoxy.disketarr.data.SettingsStore
+import io.github.catadoxy.disketarr.data.model.LibraryType
+import io.github.catadoxy.disketarr.data.model.MediaStatus
 import io.github.catadoxy.disketarr.data.network.ApiClient
+import io.github.catadoxy.disketarr.data.network.DisketarrApiService
+import io.github.catadoxy.disketarr.viewmodel.asSeasonSummaries
+import io.github.catadoxy.disketarr.viewmodel.buildTrackRequest
 
 /** Marks one episode watched through Floppy, then refreshes every widget instance. */
 class MarkWatchedWorker(
@@ -21,6 +26,8 @@ class MarkWatchedWorker(
         val source = inputData.getString(WidgetActionReceiver.EXTRA_SOURCE) ?: return Result.failure()
         val mediaType = inputData.getString(WidgetActionReceiver.EXTRA_MEDIA_TYPE) ?: return Result.failure()
         val mediaId = inputData.getString(WidgetActionReceiver.EXTRA_MEDIA_ID) ?: return Result.failure()
+        val library = LibraryType.apiParam(inputData.getString(WidgetActionReceiver.EXTRA_LIBRARY))
+            ?: LibraryType.TV
         val season = inputData.getInt(WidgetActionReceiver.EXTRA_SEASON, -1)
         val episode = inputData.getInt(WidgetActionReceiver.EXTRA_EPISODE, -1)
         if (season < 0 || episode < 0) return Result.failure()
@@ -29,12 +36,19 @@ class MarkWatchedWorker(
         if (!settings.isConfigured) return Result.failure()
 
         val marked = runCatching {
-            ApiClient.getService(settings).markEpisodeWatched(
+            val service = ApiClient.getService(settings)
+            // Floppy files a watch in the library that already tracks the season,
+            // so an untracked season has to be created there first - otherwise
+            // it lands in the TV Seasons library together with a stray copy of
+            // the show.
+            ensureSeasonTracked(service, source, mediaId, season, library)
+            service.markEpisodeWatched(
                 mediaType = widgetMediaType(mediaType),
                 source = source,
                 mediaId = mediaId,
                 seasonNumber = season,
                 episodeNumber = episode,
+                libraryMediaType = LibraryType.apiParam(library),
             )
         }
         if (marked.isFailure) {
@@ -87,4 +101,53 @@ class MarkWatchedWorker(
 private fun widgetMediaType(mediaType: String): String = when (mediaType.lowercase()) {
     "season", "episode", "anime" -> "tv"
     else -> mediaType
+}
+
+/**
+ * Tracks the season in the library the row came from, when it is not tracked
+ * there yet.
+ *
+ * Floppy files an episode watch in the library that already tracks the season.
+ * When no library tracks it, Floppy creates it in the TV Seasons library -
+ * together with a copy of the show, which then shows up in the Shows tab.
+ */
+private suspend fun ensureSeasonTracked(
+    service: DisketarrApiService,
+    source: String,
+    mediaId: String,
+    season: Int,
+    library: String,
+) {
+    // Only the Anime library needs this. For TV, Floppy's TV Seasons library
+    // is where a season-level watch belongs anyway.
+    if (library != LibraryType.ANIME) return
+
+    val tracked = runCatching {
+        service.listSeasonsRaw(
+            mediaType = "tv",
+            source = source,
+            mediaId = mediaId,
+            libraryMediaType = LibraryType.apiParam(library),
+            limit = 100,
+        ).asSeasonSummaries()
+            .firstOrNull { it.seasonNumber == season }
+            ?.libraryMediaType
+            ?.equals(LibraryType.ANIME, ignoreCase = true) == true
+    }.getOrDefault(false)
+    if (tracked) return
+
+    runCatching {
+        service.trackMedia(
+            mediaType = "season",
+            request = buildTrackRequest(
+                mediaType = "season",
+                source = source,
+                mediaId = mediaId,
+                seasonNumber = season,
+                status = MediaStatus.IN_PROGRESS,
+                progress = 0.0,
+                libraryMediaType = LibraryType.ANIME,
+            ),
+        )
+    }
 }

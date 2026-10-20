@@ -40,6 +40,12 @@ data class SeasonSummary(
     val totalEpisodesLeft: Int? = null,
     /** Next episode to watch in this season, when Floppy reports one. */
     val nextEpisode: NextEpisode? = null,
+    /**
+     * The Floppy library this season is tracked in. Floppy reports the library
+     * on a tracked season and leaves it empty on an untracked one, which is how
+     * the app tells "not watched yet" from "watched in another library".
+     */
+    val libraryMediaType: String? = null,
 ) {
     /** Watched + aired-but-unwatched: the episodes that actually exist to watch. */
     val airedEpisodes: Int?

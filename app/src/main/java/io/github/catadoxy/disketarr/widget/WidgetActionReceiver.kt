@@ -9,6 +9,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import io.github.catadoxy.disketarr.MainActivity
+import io.github.catadoxy.disketarr.data.model.LibraryType
 
 /**
  * Handles taps coming from the widget's collection.
@@ -48,10 +49,12 @@ class WidgetActionReceiver : BroadcastReceiver() {
         val source = intent.getStringExtra(EXTRA_SOURCE)?.takeIf { it.isNotBlank() } ?: return
         val mediaType = intent.getStringExtra(EXTRA_MEDIA_TYPE)?.takeIf { it.isNotBlank() } ?: return
         val mediaId = intent.getStringExtra(EXTRA_MEDIA_ID)?.takeIf { it.isNotBlank() } ?: return
+        val library = intent.getStringExtra(EXTRA_LIBRARY)?.takeIf { LibraryType.isSupported(it) }
 
         val launch = Intent(context, MainActivity::class.java).apply {
             action = Intent.ACTION_VIEW
-            data = Uri.parse("disketarr://details/$source/$mediaType/$mediaId")
+            val base = "disketarr://details/$source/$mediaType/$mediaId"
+            data = Uri.parse(if (library == null) base else "$base?library=$library")
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
         runCatching { context.startActivity(launch) }
@@ -61,6 +64,7 @@ class WidgetActionReceiver : BroadcastReceiver() {
         val source = intent.getStringExtra(EXTRA_SOURCE)?.takeIf { it.isNotBlank() } ?: return
         val mediaType = intent.getStringExtra(EXTRA_MEDIA_TYPE)?.takeIf { it.isNotBlank() } ?: return
         val mediaId = intent.getStringExtra(EXTRA_MEDIA_ID)?.takeIf { it.isNotBlank() } ?: return
+        val library = intent.getStringExtra(EXTRA_LIBRARY).orEmpty()
         val season = intent.getIntExtra(EXTRA_SEASON, -1)
         val episode = intent.getIntExtra(EXTRA_EPISODE, -1)
         if (season < 0 || episode < 0) return
@@ -71,6 +75,7 @@ class WidgetActionReceiver : BroadcastReceiver() {
                     EXTRA_SOURCE to source,
                     EXTRA_MEDIA_TYPE to mediaType,
                     EXTRA_MEDIA_ID to mediaId,
+                    EXTRA_LIBRARY to library,
                     EXTRA_SEASON to season,
                     EXTRA_EPISODE to episode,
                 ),
@@ -87,6 +92,8 @@ class WidgetActionReceiver : BroadcastReceiver() {
         const val EXTRA_SOURCE = "source"
         const val EXTRA_MEDIA_TYPE = "media_type"
         const val EXTRA_MEDIA_ID = "media_id"
+        /** The Floppy library the title lives in ("tv", "anime", ...). */
+        const val EXTRA_LIBRARY = "library"
         const val EXTRA_SEASON = "season"
         const val EXTRA_EPISODE = "episode"
         const val EXTRA_APPWIDGET_ID = "appwidget_id"

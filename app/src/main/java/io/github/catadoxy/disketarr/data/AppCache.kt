@@ -143,9 +143,16 @@ class AppCacheRepository @Inject constructor(
 
     // ---- media details ----------------------------------------------------
 
+    /**
+     * Cache key for a show's details.
+     *
+     * The library is part of the key: the same title can be tracked in the TV
+     * and in the Anime library with different status and progress, and the
+     * cached page must not bleed from one into the other.
+     */
     @Synchronized
-    fun detailKey(mediaType: String, source: String, mediaId: String): String =
-        "$mediaType|$source|$mediaId"
+    fun detailKey(mediaType: String, source: String, mediaId: String, library: String? = null): String =
+        if (library.isNullOrBlank()) "$mediaType|$source|$mediaId" else "$mediaType|$source|$mediaId|$library"
 
     @Synchronized
     fun details(key: String): Details? {

@@ -12,12 +12,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import io.github.catadoxy.disketarr.data.SettingsStore
+import io.github.catadoxy.disketarr.data.repository.DisketarrRepository
 import io.github.catadoxy.disketarr.ui.navigation.DisketarrNavHost
 import io.github.catadoxy.disketarr.ui.theme.DisketarrClientTheme
+import io.github.catadoxy.disketarr.viewmodel.AnimeLibraryMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -60,6 +64,17 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+
+        // Floppy decides whether the anime live in their own library, and with
+        // it whether the app has an Anime tab. Ask the server, so a change
+        // there is picked up here.
+        lifecycleScope.launch {
+            if (!settingsStore.isConfigured) return@launch
+            val mode = runCatching {
+                AnimeLibraryMode.read(DisketarrRepository(settingsStore).service())
+            }.getOrNull()
+            if (mode != null) settingsStore.animeLibraryMode = mode
         }
     }
 

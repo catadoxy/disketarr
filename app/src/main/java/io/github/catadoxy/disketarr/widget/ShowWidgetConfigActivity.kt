@@ -40,6 +40,18 @@ class ShowWidgetConfigActivity : ComponentActivity() {
 
     private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
 
+    /**
+     * True when the launcher started this screen to place a widget.
+     *
+     * The launcher runs the config activity in its own task and expects the
+     * widget id back as the activity's result. The widget's own configure
+     * button starts the same activity in the app's task instead - there is no
+     * result to deliver, and the home screen is where the user wants to end
+     * up.
+     */
+    private val startedByLauncher: Boolean
+        get() = intent.flags and Intent.FLAG_ACTIVITY_NEW_TASK == 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         appWidgetId = intent?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
@@ -87,10 +99,22 @@ initialPosterSize = prefs.getString("postersize_$appWidgetId", "medium") ?: "med
                             // collection so the list reloads with the new type/sort.
                             ShowWidgetUpdater.update(applicationContext, appWidgetId)
 
-                            setResult(Activity.RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
-                            // Return to the home screen instead of landing on MainActivity,
-                            // which is the base of this task.
-                            finishAffinity()
+                            // The launcher started this screen for the widget's
+                            // result, so the result has to go back with finish().
+                            // finishAffinity() cannot deliver a result - it
+                            // throws, and the launcher then drops the widget
+                            // because it never received an id.
+                            setResult(
+                                Activity.RESULT_OK,
+                                Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId),
+                            )
+                            if (!startedByLauncher) {
+                                // The widget's own configure button: go back to
+                                // the home screen instead of the app's main
+                                // screen, which is the base of this task.
+                                moveTaskToBack(true)
+                            }
+                            finish()
                         },
                     )
                 }

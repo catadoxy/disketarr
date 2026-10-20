@@ -3,6 +3,7 @@ package io.github.catadoxy.disketarr.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.catadoxy.disketarr.data.SettingsStore
+import io.github.catadoxy.disketarr.data.model.LibraryType
 import io.github.catadoxy.disketarr.data.model.MediaDetail
 import io.github.catadoxy.disketarr.data.model.MediaStatus
 import io.github.catadoxy.disketarr.data.model.MediaUpdateRequest
@@ -86,12 +87,36 @@ private suspend fun watchedEpisodesFromHistory(
     return historyWatchedCache[mediaId] ?: emptySet()
 }
 
-private fun episodeKey(mediaType: String, source: String, mediaId: String, season: Int, episode: Int): String =
-    "${apiMediaType(mediaType)}|$source|$mediaId|$season|$episode"
+/**
+ * Key of a locally recorded watched episode.
+ *
+ * The library is part of it: the same episode can be watched in the TV and in
+ * the Anime library, and the two are different entries.
+ */
+private fun episodeKey(
+    mediaType: String,
+    source: String,
+    mediaId: String,
+    season: Int,
+    episode: Int,
+    library: String = "",
+): String =
+    "${apiMediaType(mediaType, source)}|$source|$mediaId|$season|$episode|$library"
 
-/** Floppy's seasons/episodes/watch endpoints only accept "tv" (even for anime). */
-internal fun apiMediaType(mediaType: String): String =
-    if (mediaType.lowercase() == "anime") "tv" else mediaType
+/**
+ * The media type in Floppy's path.
+ *
+ * The path segment is the *item* type, and the library is a separate
+ * parameter. A TMDB anime is a "tv" item, but the search reports it as
+ * "anime" - so the source decides: only MyAnimeList has "anime" items. The
+ * seasons/episodes/watch routes only accept "tv" (even for anime).
+ */
+internal fun apiMediaType(mediaType: String, source: String? = null): String =
+    when {
+        mediaType.lowercase() in setOf("season", "episode") -> "tv"
+        mediaType.lowercase() == "anime" && source?.lowercase() != "mal" -> "tv"
+        else -> mediaType
+    }
 
 fun buildTrackRequest(
     mediaType: String,
@@ -105,13 +130,23 @@ fun buildTrackRequest(
     startDate: String? = null,
     endDate: String? = null,
     notes: String? = null,
+    seasonNumber: Int? = null,
+    /**
+     * The Floppy library to file the entry in.
+     *
+     * This is what decides the library, not [mediaType]: a TMDB anime is a
+     * "tv" item, so passing the item's media type would file it in the TV
+     * library and it would show up in the Shows tab instead of the Anime one.
+     */
+    libraryMediaType: String = mediaType,
 ): TrackMediaRequest = TrackMediaRequest(
     source = source,
     mediaId = mediaId,
     title = title,
     image = image,
     imageUrl = image,
-    libraryMediaType = mediaType,
+    seasonNumber = seasonNumber,
+    libraryMediaType = libraryMediaType,
     score = score,
     status = status,
     progress = progress,
@@ -147,9 +182,29 @@ class DetailsViewModel @Inject constructor(
     private val watchedEpisodeKeys: MutableSet<String> =
         settingsStore.watchedEpisodeKeys().toMutableSet()
 
-    /** Total episodes watched for this show (from Floppy's max_progress). Used
-     *  as a heuristic for shows whose episodes aren't tracked individually. */
+    /** Total episodes of this show (from Floppy's max_progress). Only used for
+     *  the debug dump below - the watched state comes from Floppy itself. */
     private var showMaxProgress: Int = 0
+
+    /**
+     * The Floppy library this screen is showing.
+     *
+     * A title can be tracked in more than one library at once - the TV library
+     * and the Anime library keep separate status and progress for it - so every
+     * read and write has to say which copy it means. Without it Floppy answers
+     * with the TV library's copy and a write lands in the wrong place.
+     */
+    private var library: String = LibraryType.TV
+
+    /**
+     * The `library_media_type` to send with a request.
+     *
+     * Only the Anime library needs one: Floppy's default answer is the TV
+     * library together with the TV Seasons library, which is what a show
+     * tracked as a show or per season needs.
+     */
+    private val libraryParam: String?
+        get() = LibraryType.apiParam(library)
 
     private val _uiState = MutableStateFlow<DetailsUiState>(DetailsUiState.Loading)
     val uiState: StateFlow<DetailsUiState> = _uiState.asStateFlow()
@@ -158,22 +213,27 @@ class DetailsViewModel @Inject constructor(
     val actionMessage: StateFlow<String?> = _actionMessage.asStateFlow()
 
     /** Reload from the server, ignoring the cache. Used by pull-to-refresh. */
-    fun reload(source: String, mediaType: String, mediaId: String) {
-        appCache.invalidateAfterWrite(appCache.detailKey(mediaType, source, mediaId))
-        load(source, mediaType, mediaId)
+    fun reload(source: String, mediaType: String, mediaId: String, library: String = this.library) {
+        appCache.invalidateAfterWrite(appCache.detailKey(mediaType, source, mediaId, library))
+        load(source, mediaType, mediaId, library)
     }
 
-    fun load(source: String, mediaType: String, mediaId: String) {
-        val cacheKey = appCache.detailKey(mediaType, source, mediaId)
+    fun load(source: String, mediaType: String, mediaId: String, library: String = LibraryType.TV) {
+        this.library = library.lowercase().takeIf { LibraryType.isSupported(it) } ?: LibraryType.TV
+        val cacheKey = appCache.detailKey(mediaType, source, mediaId, this.library)
 
         // Opening a title you have already viewed costs nothing.
         appCache.details(cacheKey)?.let { cached ->
             if (appCache.isFresh(cached.at)) {
-                // Apply locally tracked watched state (needed for shows whose
-                // episodes aren't tracked individually, e.g. anime).
+                // Floppy reports the watched state of every episode, so the local
+                // record only fills in what it does not track at all - a season
+                // that is not in the library yet.
                 val episodes = cached.episodes.map { ep ->
-                    val key = episodeKey(mediaType, source, mediaId, ep.seasonNumber ?: cached.selectedSeason ?: 1, ep.episodeNumber)
-                    if (ep.watched) ep else ep.copy(watched = watchedEpisodeKeys.contains(key))
+                    val season = ep.seasonNumber ?: cached.selectedSeason ?: 1
+                    val key = episodeKey(mediaType, source, mediaId, season, ep.episodeNumber, this.library)
+                    val tracked = cached.seasons.any { it.seasonNumber == season && !it.libraryMediaType.isNullOrBlank() }
+                    val isWatched = ep.watched || (!tracked && watchedEpisodeKeys.contains(key))
+                    if (isWatched == ep.watched) ep else ep.copy(watched = isWatched)
                 }
                 _uiState.value = DetailsUiState.Success(
                     detail = cached.detail,
@@ -183,8 +243,14 @@ class DetailsViewModel @Inject constructor(
                 )
 
                 // Fetch history in the background to mark already-watched episodes
-                // for shows whose episodes aren't tracked individually.
-                if (mediaType.lowercase() == "anime" || mediaType.lowercase() == "tv") {
+                // for seasons Floppy does not track in this library. That is
+                // rare, and the history is thousands of entries - so it is only
+                // fetched when the season on screen needs it.
+                val selected = cached.selectedSeason
+                val needsHistory = selected != null && cached.seasons.any {
+                    it.seasonNumber == selected && it.libraryMediaType.isNullOrBlank()
+                }
+                if (needsHistory && (mediaType.lowercase() == "anime" || mediaType.lowercase() == "tv")) {
                     viewModelScope.launch {
                         try {
                             val historyWatched = watchedEpisodesFromHistory(repository.service(), mediaId)
@@ -192,7 +258,10 @@ class DetailsViewModel @Inject constructor(
                             val current = _uiState.value as? DetailsUiState.Success ?: return@launch
                             if (current.detail.mediaId != mediaId) return@launch
                             val updated = current.episodes.map { ep ->
-                                val isWatched = ep.watched || historyWatched.contains("${ep.seasonNumber}|${ep.episodeNumber}")
+                                val season = ep.seasonNumber ?: current.selectedSeason ?: 1
+                                val tracked = current.seasons.any { it.seasonNumber == season && !it.libraryMediaType.isNullOrBlank() }
+                                val isWatched = ep.watched ||
+                                    (!tracked && historyWatched.contains("${ep.seasonNumber ?: season}|${ep.episodeNumber}"))
                                 if (isWatched == ep.watched) ep else ep.copy(watched = isWatched)
                             }
                             _uiState.value = current.copy(episodes = updated)
@@ -209,7 +278,16 @@ class DetailsViewModel @Inject constructor(
             try {
                 withContext(Dispatchers.IO) {
                     val service = repository.service()
-                    val detail = service.getMediaDetail(mediaType = mediaType, source = source, mediaId = mediaId)
+                    val (detail, resolvedLibrary) = resolveDetail(
+                        service = service,
+                        mediaType = mediaType,
+                        source = source,
+                        mediaId = mediaId,
+                    )
+                    // The title may live in the other library than the one the
+                    // screen was opened for, so everything from here on works
+                    // with the library Floppy actually has it in.
+                    this@DetailsViewModel.library = resolvedLibrary
                     showMaxProgress = detail.maxProgress ?: 0
                     try { java.io.File("/sdcard/showMaxProgress.txt").writeText("showMaxProgress=$showMaxProgress mediaId=$mediaId") } catch (e: Exception) {}
                     
@@ -259,46 +337,21 @@ class DetailsViewModel @Inject constructor(
         source: String,
         mediaId: String,
     ): Triple<List<SeasonSummary>, Int?, List<SeasonEpisode>> {
-        val apiType = apiMediaType(mediaType)
+        val apiType = apiMediaType(mediaType, source)
 
         val summaries = runCatching {
-            service.listSeasonsRaw(mediaType = apiMediaType(mediaType), source = source, mediaId = mediaId).asSeasonSummaries()
+            service.listSeasonsRaw(
+                mediaType = apiMediaType(mediaType, source),
+                source = source,
+                mediaId = mediaId,
+                libraryMediaType = libraryParam,
+            ).asSeasonSummaries()
         }.getOrElse { emptyList() }.let { seasons ->
             if (settingsStore.hideSpecialEpisodes) seasons.filter { it.seasonNumber != 0 } else seasons
         }
 
         val selected = pickDefaultSeason(summaries)
             ?: return Triple(summaries, null, emptyList())
-
-        // For shows whose episodes aren't tracked individually, use max_progress
-        // as a heuristic: episodes are watched in order, so the first
-        // showMaxProgress episodes (across seasons) are marked watched.
-        val watchedPerSeason: Map<Int, Int> = if (showMaxProgress > 0) {
-            val sortedSeasons = summaries.sortedBy { it.seasonNumber }
-            var cumulative = 0
-            val result = mutableMapOf<Int, Int>()
-            for (s in sortedSeasons) {
-                val count = runCatching {
-                    service.listSeasonEpisodesRaw(
-                        mediaType = apiType,
-                        source = source,
-                        mediaId = mediaId,
-                        seasonNumber = s.seasonNumber,
-                        limit = 1,
-                    )["pagination"]?.toStringKeyMapOrNull()?.get("total")?.asIntOrNull() ?: 0
-                }.getOrDefault(0)
-                val watched = (showMaxProgress - cumulative).coerceIn(0, count)
-                result[s.seasonNumber] = watched
-                cumulative += count
-            }
-            result
-        } else emptyMap()
-
-        val watchedInSelectedSeason = watchedPerSeason[selected] ?: 0
-
-        // placeholder2 replaced
-
-
 
         val rawEpisodes = runCatching {
             val all = mutableListOf<SeasonEpisode>()
@@ -309,6 +362,7 @@ class DetailsViewModel @Inject constructor(
                     source = source,
                     mediaId = mediaId,
                     seasonNumber = selected,
+                    libraryMediaType = libraryParam,
                     limit = 200,
                     offset = offset,
                 ).asSeasonEpisodes(fallbackSeason = selected)
@@ -319,32 +373,19 @@ class DetailsViewModel @Inject constructor(
             all
         }.getOrElse { emptyList() }
 
-        // Override progress for shows where the API's progress is stale or missing.
-        // For anime, the API reports a low/incorrect progress (or null) while
-        // max_progress reflects the true watched count.
-        val selectedSummaryProgress = summaries.find { it.seasonNumber == selected }?.progress
-        val apiProgress = selectedSummaryProgress ?: 0
-        val overrideProgress = showMaxProgress > 0 && showMaxProgress > apiProgress
-        val updatedSummaries = if (overrideProgress) {
-            summaries.map { s ->
-                s.copy(progress = watchedPerSeason[s.seasonNumber] ?: s.progress, episodesLeft = 0)
-            }
-        } else summaries
-
-        val episodes = rawEpisodes.mapIndexed { index, ep ->
-            val key = episodeKey(mediaType, source, mediaId, ep.seasonNumber ?: selected, ep.episodeNumber)
+        // Floppy reports the real state now that the library is known: the
+        // season summaries carry what is watched, and the episode rows carry
+        // their own status. The local record only fills in what Floppy does
+        // not track at all - a season that is not in the library yet.
+        val seasonTracked = summaries.any { it.seasonNumber == selected && !it.libraryMediaType.isNullOrBlank() }
+        val episodes = rawEpisodes.map { ep ->
+            val key = episodeKey(mediaType, source, mediaId, ep.seasonNumber ?: selected, ep.episodeNumber, library)
             val isWatched = ep.watched ||
-                (showMaxProgress > 0 && (index + 1) <= watchedInSelectedSeason) ||
-                watchedEpisodeKeys.contains(key)
+                (!seasonTracked && watchedEpisodeKeys.contains(key))
             if (isWatched == ep.watched) ep else ep.copy(watched = isWatched)
         }
 
-
-        // Override progress when the API's value is missing or inconsistent
-        // with the max_progress heuristic (e.g. anime shows where the API
-        // reports a stale/low progress).
-
-        return Triple(updatedSummaries, selected, episodes)
+        return Triple(summaries, selected, episodes)
     }
 
     /** Tap a season header to expand it; tap again to collapse it. */
@@ -365,7 +406,7 @@ class DetailsViewModel @Inject constructor(
         _uiState.value = current.copy(selectedSeason = season, episodes = emptyList(), loadingEpisodes = true)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                val apiType = apiMediaType(mediaType)
+                val apiType = apiMediaType(mediaType, source)
                 val episodes = runCatching {
                     val service = repository.service()
                     val all = mutableListOf<SeasonEpisode>()
@@ -376,6 +417,7 @@ class DetailsViewModel @Inject constructor(
                             source = source,
                             mediaId = mediaId,
                             seasonNumber = season,
+                            libraryMediaType = libraryParam,
                             limit = 200,
                             offset = offset,
                         ).asSeasonEpisodes(fallbackSeason = season)
@@ -383,25 +425,17 @@ class DetailsViewModel @Inject constructor(
                         if (page.size < 200) break
                         offset += page.size
                     }
-                    // Compute watched count for this season using max_progress.
-                    val sortedSeasons = (uiState.value as? DetailsUiState.Success)?.seasons?.sortedBy { it.seasonNumber } ?: emptyList()
-                    var cumulative = 0
-                    var watchedInThisSeason = 0
-                    for (s in sortedSeasons) {
-                        val count = if (s.seasonNumber == season) all.size else runCatching {
-                            service.listSeasonEpisodesRaw(mediaType = apiType, source = source, mediaId = mediaId, seasonNumber = s.seasonNumber, limit = 1)["pagination"]?.toStringKeyMapOrNull()?.get("total")?.asIntOrNull() ?: 0
-                        }.getOrDefault(0)
-                        if (s.seasonNumber == season) {
-                            watchedInThisSeason = (showMaxProgress - cumulative).coerceIn(0, all.size)
-                            break
-                        }
-                        cumulative += count
+                    // Floppy reports the watched state of every episode. The
+                    // local record only fills in what Floppy does not track at
+                    // all - a season that is not in the library yet.
+                    val knownSeasons = (uiState.value as? DetailsUiState.Success)?.seasons.orEmpty()
+                    val seasonTracked = knownSeasons.any {
+                        it.seasonNumber == season && !it.libraryMediaType.isNullOrBlank()
                     }
-                    all.mapIndexed { index, ep ->
-                        val key = episodeKey(mediaType, source, mediaId, ep.seasonNumber ?: season, ep.episodeNumber)
+                    all.map { ep ->
+                        val key = episodeKey(mediaType, source, mediaId, ep.seasonNumber ?: season, ep.episodeNumber, library)
                         val isWatched = ep.watched ||
-                            (showMaxProgress > 0 && (index + 1) <= watchedInThisSeason) ||
-                            watchedEpisodeKeys.contains(key)
+                            (!seasonTracked && watchedEpisodeKeys.contains(key))
                         if (isWatched == ep.watched) ep else ep.copy(watched = isWatched)
                     }
                 }.getOrElse { emptyList() }
@@ -409,12 +443,113 @@ class DetailsViewModel @Inject constructor(
                 val latest = _uiState.value as? DetailsUiState.Success ?: return@withContext
                 _uiState.value = latest.copy(episodes = episodes, loadingEpisodes = false)
                 appCache.putEpisodes(
-                    appCache.detailKey(mediaType, source, mediaId),
+                    appCache.detailKey(mediaType, source, mediaId, library),
                     episodes,
                     season,
                 )
             }
         }
+    }
+
+    /**
+     * Tracks the season in the library the user is browsing, when it is not
+     * tracked there yet.
+     *
+     * Floppy files an episode watch in the library that already tracks the
+     * season. When no library tracks it, Floppy creates the season in the TV
+     * Seasons library - and a copy of the show with it, which then shows up in
+     * the Shows tab as a duplicate of the anime the user is watching.
+     */
+    private suspend fun ensureSeasonTracked(
+        service: DisketarrApiService,
+        source: String,
+        mediaId: String,
+        season: Int,
+    ) {
+        // Only the Anime library needs this. For TV, Floppy's TV Seasons
+        // library is where a season-level watch belongs anyway.
+        if (library != LibraryType.ANIME) return
+
+        val state = _uiState.value as? DetailsUiState.Success ?: return
+        val trackedInAnime = state.seasons
+            .firstOrNull { it.seasonNumber == season }
+            ?.libraryMediaType
+            ?.equals(LibraryType.ANIME, ignoreCase = true) == true
+        if (trackedInAnime) return
+
+        val status = state.detail.consumptions?.firstOrNull()?.status ?: MediaStatus.IN_PROGRESS
+        runCatching {
+            service.trackMedia(
+                mediaType = "season",
+                request = buildTrackRequest(
+                    mediaType = "season",
+                    source = source,
+                    mediaId = mediaId,
+                    seasonNumber = season,
+                    status = status,
+                    progress = 0.0,
+                    libraryMediaType = LibraryType.ANIME,
+                ),
+            )
+        }
+    }
+
+    /**
+     * The libraries a title can be tracked in, in the order they are checked.
+     *
+     * Floppy files a tracked entry in exactly one library, and the same title
+     * can be in the TV library in one account and in the Anime library in
+     * another - the Anime library exists for exactly that. The screen is opened
+     * with a guess (the tab it was opened from, or the type that was searched
+     * for), so the other libraries are checked when the title is not tracked in
+     * the guessed one.
+     */
+    private fun libraryCandidates(mediaType: String, preferred: String): List<String> {
+        val others = when (mediaType.lowercase()) {
+            // A movie only ever lives in the Movies library.
+            "movie" -> emptyList()
+            else -> listOf(LibraryType.TV, LibraryType.ANIME)
+        }
+        return (listOf(preferred) + others).distinct()
+    }
+
+    /**
+     * Reads the title and the library it is tracked in.
+     *
+     * The detail payload says whether the title is tracked in the library that
+     * was asked for, so the other libraries only cost a request when the guess
+     * was wrong.
+     */
+    private suspend fun resolveDetail(
+        service: DisketarrApiService,
+        mediaType: String,
+        source: String,
+        mediaId: String,
+    ): Pair<MediaDetail, String> {
+        val preferred = LibraryType.apiParam(library) ?: LibraryType.forMediaType(mediaType)
+        val candidates = libraryCandidates(mediaType, preferred)
+        var first: MediaDetail? = null
+        for (candidate in candidates) {
+            val detail = runCatching {
+                service.getMediaDetail(
+                    mediaType = mediaType,
+                    source = source,
+                    mediaId = mediaId,
+                    libraryMediaType = LibraryType.apiParam(candidate),
+                )
+            }.getOrNull() ?: continue
+            if (first == null) first = detail
+            if (detail.tracked != false) return detail to candidate
+        }
+        // Not tracked in any of them: show the first answer, so the screen can
+        // offer to track the title.
+        val detail = first ?: service.getMediaDetail(
+            mediaType = mediaType,
+            source = source,
+            mediaId = mediaId,
+            libraryMediaType = LibraryType.apiParam(preferred),
+        )
+        return detail to preferred
     }
 
     /** Marks the next unwatched episode watched, straight from the Overview tab. */
@@ -441,11 +576,29 @@ class DetailsViewModel @Inject constructor(
             try {
                 withContext(Dispatchers.IO) {
                     val service = repository.service()
-                    val apiType = apiMediaType(mediaType)
+                    val apiType = apiMediaType(mediaType, source)
+                    // Floppy files a watch in the library that already tracks the
+                    // season, so an untracked season has to be created in the
+                    // library the user is browsing first.
+                    ensureSeasonTracked(service, source, mediaId, season)
                     val response = if (episode.watched) {
-                        service.unmarkEpisodeWatched(apiType, source, mediaId, season, episode.episodeNumber)
+                        service.unmarkEpisodeWatched(
+                            mediaType = apiType,
+                            source = source,
+                            mediaId = mediaId,
+                            seasonNumber = season,
+                            episodeNumber = episode.episodeNumber,
+                            libraryMediaType = libraryParam,
+                        )
                     } else {
-                        service.markEpisodeWatched(apiType, source, mediaId, season, episode.episodeNumber)
+                        service.markEpisodeWatched(
+                            mediaType = apiType,
+                            source = source,
+                            mediaId = mediaId,
+                            seasonNumber = season,
+                            episodeNumber = episode.episodeNumber,
+                            libraryMediaType = libraryParam,
+                        )
                     }
 
                     if (!response.isSuccessful) {
@@ -463,14 +616,11 @@ class DetailsViewModel @Inject constructor(
                         "Watched ${episode.code}"
                     }
 
-                    val key = episodeKey(mediaType, source, mediaId, season, episode.episodeNumber)
+                    val key = episodeKey(mediaType, source, mediaId, season, episode.episodeNumber, library)
                     if (episode.watched) watchedEpisodeKeys.remove(key) else watchedEpisodeKeys.add(key)
                     settingsStore.setWatchedEpisodeKeys(watchedEpisodeKeys)
 
                     val newWatched = !episode.watched
-                    val historyWatched = if (mediaType.lowercase() == "anime" || mediaType.lowercase() == "tv") {
-                        watchedEpisodesFromHistory(service, mediaId)
-                    } else emptySet()
                     val episodes = runCatching {
                         val all = mutableListOf<SeasonEpisode>()
                         var offset = 0
@@ -480,6 +630,7 @@ class DetailsViewModel @Inject constructor(
                                 source = source,
                                 mediaId = mediaId,
                                 seasonNumber = season,
+                                libraryMediaType = libraryParam,
                                 limit = 200,
                                 offset = offset,
                             ).asSeasonEpisodes(fallbackSeason = season)
@@ -490,20 +641,18 @@ class DetailsViewModel @Inject constructor(
                         all
                     }.getOrElse { emptyList() }
                     val latest = _uiState.value as? DetailsUiState.Success ?: return@withContext
-                    // Episodes for some shows (e.g. anime) are not tracked
-                    // individually, so the server returns a null status and the
-                    // reload would leave the checkbox unchanged. Preserve the
-                    // state the API just accepted so the UI reflects the tap.
+                    // Floppy reports the state it just accepted. Keep the state
+                    // of the episode that was tapped, in case the reload lags
+                    // behind the write.
                     val merged = episodes.map { ep ->
                         val isWatched = ep.watched ||
-                            historyWatched.contains("${ep.seasonNumber ?: season}|${ep.episodeNumber}") ||
                             (ep.seasonNumber == season && ep.episodeNumber == episode.episodeNumber && newWatched)
                         ep.copy(watched = isWatched)
                     }
                     _uiState.value = latest.copy(episodes = merged, selectedSeason = season)
                     // A write changes the item and the lists that contain it.
-                    appCache.invalidateAfterWrite(appCache.detailKey(mediaType, source, mediaId))
-                    appCache.putEpisodes(appCache.detailKey(mediaType, source, mediaId), episodes, season)
+                    appCache.invalidateAfterWrite(appCache.detailKey(mediaType, source, mediaId, library))
+                    appCache.putEpisodes(appCache.detailKey(mediaType, source, mediaId, library), episodes, season)
                 }
             } catch (e: Exception) {
                 _actionMessage.value = "Episode update failed: ${e.message ?: "unknown error"}"
@@ -534,6 +683,7 @@ class DetailsViewModel @Inject constructor(
                         source = source,
                         mediaId = mediaId,
                         consumptionId = existing.consumptionId.toString(),
+                        libraryMediaType = libraryParam,
                         request = buildMediaUpdateRequest(
                             score = existing.score,
                             status = MediaStatus.COMPLETED,
@@ -553,12 +703,13 @@ class DetailsViewModel @Inject constructor(
                             score = detail.score,
                             status = MediaStatus.COMPLETED,
                             progress = progress,
+                            libraryMediaType = library,
                         ),
                     )
                     _actionMessage.value = "Tracked${response.consumptionId?.let { " (#$it)" } ?: ""}"
                 }
                 // A write changes the item and every list that contains it.
-                appCache.invalidateAfterWrite(appCache.detailKey(mediaType, source, mediaId))
+                appCache.invalidateAfterWrite(appCache.detailKey(mediaType, source, mediaId, library))
                 }
             } catch (e: Exception) {
                 _actionMessage.value = "Mark watched failed: ${e.message ?: "unknown error"}"
@@ -588,6 +739,7 @@ class DetailsViewModel @Inject constructor(
                         source = source,
                         mediaId = mediaId,
                         consumptionId = existing.consumptionId.toString(),
+                        libraryMediaType = libraryParam,
                         request = buildMediaUpdateRequest(
                             score = score,
                             status = existing.status,
@@ -608,11 +760,12 @@ class DetailsViewModel @Inject constructor(
                             // Rating is not watching: track it on the watchlist with
                             // nothing consumed rather than at max progress.
                             progress = 0.0,
+                            libraryMediaType = library,
                         ),
                     )
                 }
                 _actionMessage.value = "Rated ${score} (${response.consumptionId ?: "saved"})"
-                appCache.invalidateAfterWrite(appCache.detailKey(mediaType, source, mediaId))
+                appCache.invalidateAfterWrite(appCache.detailKey(mediaType, source, mediaId, library))
                 }
             } catch (e: Exception) {
                 _actionMessage.value = "Rate failed: ${e.message ?: "unknown error"}"
@@ -650,10 +803,11 @@ class DetailsViewModel @Inject constructor(
                             score = detail.score,
                             status = MediaStatus.PLANNING,
                             progress = 0.0,
+                            libraryMediaType = library,
                         ),
                     )
                     _actionMessage.value = "Added to tracker${response.consumptionId?.let { " (#$it)" } ?: ""}"
-                    appCache.invalidateAfterWrite(appCache.detailKey(mediaType, source, mediaId))
+                    appCache.invalidateAfterWrite(appCache.detailKey(mediaType, source, mediaId, library))
                 }
             } catch (e: Exception) {
                 _actionMessage.value = "Add to tracker failed: ${e.message ?: "unknown error"}"
@@ -684,6 +838,7 @@ class DetailsViewModel @Inject constructor(
                         source = source,
                         mediaId = mediaId,
                         consumptionId = existing.consumptionId.toString(),
+                        libraryMediaType = libraryParam,
                         request = buildMediaUpdateRequest(
                             score = existing.score,
                             status = MediaStatus.PLANNING,
@@ -691,7 +846,7 @@ class DetailsViewModel @Inject constructor(
                         ),
                     )
                     _actionMessage.value = "Unmarked watched${response.consumptionId?.let { " (#$it)" } ?: ""}"
-                    appCache.invalidateAfterWrite(appCache.detailKey(mediaType, source, mediaId))
+                    appCache.invalidateAfterWrite(appCache.detailKey(mediaType, source, mediaId, library))
                 }
             } catch (e: Exception) {
                 _actionMessage.value = "Unmark failed: ${e.message ?: "unknown error"}"
@@ -713,15 +868,20 @@ class DetailsViewModel @Inject constructor(
                         return@withContext
                     }
                     val mediaType = detail.mediaType
-                    val response = service.untrackMedia(mediaType = mediaType, source = source, mediaId = mediaId)
+                    val response = service.untrackMedia(
+                        mediaType = mediaType,
+                        source = source,
+                        mediaId = mediaId,
+                        libraryMediaType = libraryParam,
+                    )
                     if (!response.isSuccessful && response.code() != 204) {
                         _actionMessage.value = "Untrack failed: HTTP ${response.code()}"
                         return@withContext
                     }
                     _actionMessage.value = "Untracked"
-                    appCache.invalidateAfterWrite(appCache.detailKey(mediaType, source, mediaId))
+                    appCache.invalidateAfterWrite(appCache.detailKey(mediaType, source, mediaId, library))
                     // Refresh so tracked/consumption state reflects the change.
-                    load(source, mediaType, mediaId)
+                    load(source, mediaType, mediaId, library)
                 }
             } catch (e: Exception) {
                 _actionMessage.value = "Untrack failed: ${e.message ?: "unknown error"}"

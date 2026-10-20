@@ -38,7 +38,7 @@ interface DisketarrApiService {
     suspend fun getLists(): Map<String, Any?>
 
     @GET("api/v1/user/preferences/")
-    suspend fun getUserPreferences(): retrofit2.Response<Unit>
+    suspend fun getUserPreferences(): retrofit2.Response<Map<String, Any?>>
 
     /**
      * Summary figures for the Statistics tab. The full payload is large (every
@@ -138,6 +138,7 @@ interface DisketarrApiService {
         @Path("media_type") mediaType: String,
         @Path("source") source: String,
         @Path("media_id") mediaId: String,
+        @Query("library_media_type") libraryMediaType: String? = null,
     ): retrofit2.Response<Unit>
 
     @GET("api/v1/media/{media_type}/{source}/{media_id}/")
@@ -145,6 +146,12 @@ interface DisketarrApiService {
         @Path("media_type") mediaType: String,
         @Path("source") source: String,
         @Path("media_id") mediaId: String,
+        /**
+         * The Floppy library the entry lives in. A title can be tracked in more
+         * than one library, each with its own status and progress; without this
+         * Floppy answers with the TV library's copy.
+         */
+        @Query("library_media_type") libraryMediaType: String? = null,
     ): MediaDetail
 
     /**
@@ -157,6 +164,7 @@ interface DisketarrApiService {
         @Path("media_type") mediaType: String,
         @Path("source") source: String,
         @Path("media_id") mediaId: String,
+        @Query("library_media_type") libraryMediaType: String? = null,
         @Query("limit") limit: Int? = 100,
     ): Map<String, Any?>
 
@@ -171,6 +179,7 @@ interface DisketarrApiService {
         @Path("source") source: String,
         @Path("media_id") mediaId: String,
         @Path("season_number") seasonNumber: Int,
+        @Query("library_media_type") libraryMediaType: String? = null,
         @Query("limit") limit: Int? = 100,
         @Query("offset") offset: Int? = 0,
     ): Map<String, Any?>
@@ -183,6 +192,12 @@ interface DisketarrApiService {
         @Path("media_id") mediaId: String,
         @Path("season_number") seasonNumber: Int,
         @Path("episode_number") episodeNumber: Int,
+        /**
+         * Floppy files a watch in the library that already tracks the season.
+         * Sending the library keeps the request honest; a season that is not
+         * tracked in it is created there first.
+         */
+        @Query("library_media_type") libraryMediaType: String? = null,
     ): retrofit2.Response<Unit>
 
     /** Clears one episode's watched state. Needs `watchlist:write`. */
@@ -193,6 +208,7 @@ interface DisketarrApiService {
         @Path("media_id") mediaId: String,
         @Path("season_number") seasonNumber: Int,
         @Path("episode_number") episodeNumber: Int,
+        @Query("library_media_type") libraryMediaType: String? = null,
     ): retrofit2.Response<Unit>
 
     @POST("api/v1/media/{media_type}/")
@@ -207,6 +223,7 @@ interface DisketarrApiService {
         @Path("source") source: String,
         @Path("media_id") mediaId: String,
         @Path("consumption_id") consumptionId: String,
+        @Query("library_media_type") libraryMediaType: String? = null,
         @Body request: MediaUpdateRequest,
     ): TrackedMediaResponse
 

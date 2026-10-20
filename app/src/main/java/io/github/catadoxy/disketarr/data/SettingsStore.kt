@@ -6,9 +6,13 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import io.github.catadoxy.disketarr.data.model.SearchResult
 import io.github.catadoxy.disketarr.data.network.BaseUrlNormalizer
+import io.github.catadoxy.disketarr.viewmodel.AnimeLibraryMode
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Holds the two things this app needs to talk to Disketarr:
@@ -67,6 +71,7 @@ class SettingsStore(context: Context) {
     fun saveSelectedCategories(selection: Set<String>) {
         val allowed = setOf("movie", "tv", "anime")
         prefs.edit().putStringSet(KEY_SELECTED_CATEGORIES, selection.intersect(allowed)).apply()
+        refreshCategories()
     }
 
     fun availableCategories(): Set<String> {
@@ -76,6 +81,49 @@ class SettingsStore(context: Context) {
 
     fun saveAvailableCategories(selection: Set<String>) {
         prefs.edit().putStringSet(KEY_AVAILABLE_CATEGORIES, selection).apply()
+        refreshCategories()
+    }
+
+    /**
+     * Where Floppy files the anime: "anime", "tv" or "both".
+     *
+     * Floppy's setting decides whether the app has an Anime tab at all, so it is
+     * read from the server and kept here.
+     */
+    var animeLibraryMode: String = AnimeLibraryMode.ANIME
+        set(value) {
+            field = value
+            prefs.edit().putString(KEY_ANIME_LIBRARY_MODE, value).apply()
+            refreshCategories()
+        }
+
+    /**
+     * The categories the app shows.
+     *
+     * The selection is the user's choice. What Floppy's anime setting rules
+     * out is taken off it: with the anime in the TV library there is no Anime
+     * tab, because there is no Anime library to show.
+     */
+    private val _categories = MutableStateFlow(Categories())
+    val categories: StateFlow<Categories> = _categories.asStateFlow()
+
+    data class Categories(
+        val selected: Set<String> = emptySet(),
+        val available: Set<String> = emptySet(),
+        val effective: Set<String> = emptySet(),
+    )
+
+    init {
+        animeLibraryMode = prefs.getString(KEY_ANIME_LIBRARY_MODE, AnimeLibraryMode.ANIME)
+            ?: AnimeLibraryMode.ANIME
+        refreshCategories()
+    }
+
+    private fun refreshCategories() {
+        val selected = selectedCategories()
+        val available = availableCategories()
+        val effective = AnimeLibraryMode.effectiveCategories(selected, animeLibraryMode)
+        _categories.value = Categories(selected = selected, available = available, effective = effective)
     }
 
     fun seriesReminders(): Set<String> =
@@ -260,6 +308,7 @@ class SettingsStore(context: Context) {
         private const val KEY_REMINDER_LEAD_MINUTES = "reminder_lead_minutes"
         private const val KEY_SELECTED_CATEGORIES = "selected_categories"
         private const val KEY_AVAILABLE_CATEGORIES = "available_categories"
+        private const val KEY_ANIME_LIBRARY_MODE = "anime_library_mode"
         private const val KEY_SERIES_REMINDERS = "series_reminders"
         private const val KEY_SAVED_SERVERS = "saved_servers"
     }

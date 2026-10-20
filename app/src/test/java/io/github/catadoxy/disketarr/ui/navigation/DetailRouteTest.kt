@@ -19,6 +19,15 @@ class DetailRouteTest {
     fun supported_top_level_media_types_keep_their_type() {
         assertEquals("tv", detailRouteMediaType("tv"))
         assertEquals("movie", detailRouteMediaType("movie"))
-        assertEquals("anime", detailRouteMediaType("anime"))
+    }
+
+    /**
+     * The path segment is the item type. A TMDB anime is a "tv" item, while a
+     * MyAnimeList anime really is an "anime" item.
+     */
+    @Test
+    fun an_anime_is_a_tv_item_unless_it_comes_from_myanimelist() {
+        assertEquals("tv", detailRouteMediaType("anime", "tmdb"))
+        assertEquals("anime", detailRouteMediaType("anime", "mal"))
     }
 }

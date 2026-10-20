@@ -164,6 +164,21 @@ class SeasonEpisodeParsingTest {
         assertEquals(null, pickDefaultSeason(emptyList()))
     }
 
+    /**
+     * The specials are a season of their own, but they rarely hold anything,
+     * so they must not win over the season the user is watching.
+     */
+    @Test
+    fun default_season_is_the_one_the_user_watched() {
+        val summaries = listOf(
+            SeasonSummary(0, MediaStatus.IN_PROGRESS, progress = 0, episodesLeft = 27),
+            SeasonSummary(1, MediaStatus.COMPLETED, progress = 24, episodesLeft = 0),
+            SeasonSummary(2, MediaStatus.IN_PROGRESS, progress = 2, episodesLeft = 1),
+        )
+
+        assertEquals(2, pickDefaultSeason(summaries))
+    }
+
     private fun seasonRow(season: Any) = linkedMapOf<String, Any?>(
         "id" to 1,
         "item" to linkedMapOf(

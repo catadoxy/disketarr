@@ -32,12 +32,27 @@ data class SearchResult(
     @Json(name = "episodes_left") val episodesLeft: Int? = null,
     @Json(name = "total_episodes_left") val totalEpisodesLeft: Int? = null,
     /**
+     * Which Floppy library this entry lives in ("tv", "anime", "season", ...).
+     *
+     * A title can be tracked in more than one library at the same time, each
+     * with its own status and progress, so the app has to say which copy it
+     * means when it reads or writes the entry.
+     */
+    @Json(name = "library_media_type") val libraryMediaType: String? = null,
+    /**
      * Parent show title for history/episode rows, whose [title] is the episode
      * name. The widget shows this on the first line, like SeriesGuide.
      */
     @Json(ignore = true) val seriesTitle: String? = null,
     /** Tracked show id for history rows, used to split history between tabs. */
     @Json(ignore = true) val showId: String? = null,
+    /**
+     * Id of the tracked entry this row is.
+     *
+     * A history row points at it with `show.id`, which is how the history of
+     * one library is told apart from the history of another.
+     */
+    @Json(ignore = true) val trackedId: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

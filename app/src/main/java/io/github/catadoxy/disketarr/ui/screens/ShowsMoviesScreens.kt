@@ -12,7 +12,7 @@ import io.github.catadoxy.disketarr.viewmodel.ShowsViewModel
 
 @Composable
 fun ShowsScreen(
-    onOpenDetail: (SearchResult) -> Unit,
+    onOpenDetail: (SearchResult, String) -> Unit,
     onOpenSearch: () -> Unit,
 ) {
     val viewModel: ShowsViewModel = hiltViewModel()
@@ -26,7 +26,7 @@ fun ShowsScreen(
 
 @Composable
 fun MoviesScreen(
-    onOpenDetail: (SearchResult) -> Unit,
+    onOpenDetail: (SearchResult, String) -> Unit,
     onOpenSearch: () -> Unit,
 ) {
     val viewModel: MoviesViewModel = hiltViewModel()
@@ -40,7 +40,7 @@ fun MoviesScreen(
 
 @Composable
 fun AnimeScreen(
-    onOpenDetail: (SearchResult) -> Unit,
+    onOpenDetail: (SearchResult, String) -> Unit,
     onOpenSearch: () -> Unit,
 ) {
     val viewModel: AnimeViewModel = hiltViewModel()

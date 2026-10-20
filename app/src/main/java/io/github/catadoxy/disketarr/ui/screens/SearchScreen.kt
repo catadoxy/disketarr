@@ -64,6 +64,7 @@ import kotlinx.coroutines.delay
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import io.github.catadoxy.disketarr.data.model.LibraryType
 import io.github.catadoxy.disketarr.data.model.Pagination
 import io.github.catadoxy.disketarr.data.model.SearchResult
 import io.github.catadoxy.disketarr.ui.components.UnderlineTabRow
@@ -83,13 +84,16 @@ private data class MediaTypeOption(
 
 @Composable
 fun SearchScreen(
-    onResultClick: (SearchResult) -> Unit,
+    onResultClick: (SearchResult, String) -> Unit,
 ) {
     val viewModel: SearchViewModel = hiltViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val recentSearches by viewModel.recentSearches.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
-    val selectedCategories = viewModel.settingsStore.selectedCategories().ifEmpty {
+    // The categories that are shown: the user's selection, minus the ones
+    // Floppy does not have and the ones its anime setting rules out.
+    val categories by viewModel.settingsStore.categories.collectAsStateWithLifecycle()
+    val selectedCategories = categories.effective.ifEmpty {
         io.github.catadoxy.disketarr.data.model.LibraryMediaTypes.ALL.toSet()
     }
     val mediaTypes = listOf(
@@ -106,6 +110,14 @@ fun SearchScreen(
     ).filter { selectedCategories.contains(normalizeMediaType(it.key)) }
     var selectedType by remember { mutableStateOf("movie") }
     var gridLayout by remember { mutableStateOf(true) }
+
+    /**
+     * The Floppy library a result is tracked in.
+     *
+     * The search type decides it: an anime found in the Anime tab belongs in
+     * the Anime library, even though the item itself is a TMDB "tv" show.
+     */
+    val searchLibrary = LibraryType.forMediaType(selectedType)
 
     fun submitSearch() {
         viewModel.searchMedia(query.trim(), mediaType = selectedType)
@@ -270,7 +282,7 @@ fun SearchScreen(
                         }
 
                         items(response.results) { result ->
-                            SearchResultGridCard(result, onClick = { onResultClick(result) })
+                            SearchResultGridCard(result, onClick = { onResultClick(result, searchLibrary) })
                         }
 
                         item(span = { GridItemSpan(maxLineSpan) }) {
@@ -293,7 +305,7 @@ fun SearchScreen(
                         }
 
                         items(response.results) { result ->
-                            SearchResultRow(result, onClick = { onResultClick(result) })
+                            SearchResultRow(result, onClick = { onResultClick(result, searchLibrary) })
                         }
 
                         item {

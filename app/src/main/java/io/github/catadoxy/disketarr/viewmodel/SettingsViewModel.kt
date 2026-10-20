@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.catadoxy.disketarr.data.AppCacheRepository
 import io.github.catadoxy.disketarr.data.SettingsStore
+import io.github.catadoxy.disketarr.data.model.LibraryType
 import io.github.catadoxy.disketarr.data.model.LibraryMediaTypes
 import javax.inject.Inject
 import io.github.catadoxy.disketarr.data.repository.DisketarrRepository
@@ -26,6 +27,9 @@ sealed interface SettingsUiState {
     data class Error(val message: String) : SettingsUiState
     data class Diagnostics(val output: String) : SettingsUiState
 }
+
+/** The categories the app offers a tab for. */
+private val APP_CATEGORIES = setOf("movie", "tv", "anime")
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -90,22 +94,42 @@ class SettingsViewModel @Inject constructor(
             withContext(Dispatchers.IO) {
                 if (!settingsStore.isConfigured) return@withContext
                 val service = repository.service()
+
+                // Floppy decides whether the anime have a library of their own.
+                // When they are filed in the TV library there is no Anime tab to
+                // show, whatever the catalog has.
+                val mode = AnimeLibraryMode.read(service)
+                if (mode != null) settingsStore.animeLibraryMode = mode
+
                 val available = mutableSetOf<String>()
                 for (type in LibraryMediaTypes.ALL) {
+                    if (type == LibraryType.ANIME && !AnimeLibraryMode.hasAnimeLibrary(mode)) continue
+                    // The catalog search says whether the type exists at all, and
+                    // it is quick. Whether the user has something of that type
+                    // only matters for the categories the app offers tabs for -
+                    // and that query is the slow one.
                     val searchTotal = runCatching {
-                        service.searchMedia(mediaType = type, query = "a", limit = 1).pagination.total
+                        service.searchMedia(mediaType = type, query = "the", limit = 1).pagination.total
                     }.getOrDefault(0)
-                    val trackedTotal = runCatching {
-                        service.listTrackedMediaByTypeRaw(mediaType = type, limit = 1).asPaginationTotalOrNull() ?: 0
-                    }.getOrDefault(0)
-                    if (searchTotal > 0 || trackedTotal > 0) available += type
+                    if (searchTotal > 0) {
+                        available += type
+                        continue
+                    }
+                    if (type !in APP_CATEGORIES) continue
+                    // The tracked list is asked for by library, not by item
+                    // type: Floppy's "tv" list also holds the Anime library's
+                    // entries, so the library is what says what is there.
+                    val library = LibraryType.forMediaType(type)
+                    val tracked = runCatching {
+                        trackedMediaOfLibrary(service = service, library = library, limit = 60)
+                            .rows
+                            .isNotEmpty()
+                    }.getOrDefault(false)
+                    if (tracked) available += type
                 }
                 val finalAvailable = if (available.isEmpty()) LibraryMediaTypes.ALL.toSet() else available
                 settingsStore.saveAvailableCategories(finalAvailable)
                 _availableCategories.value = finalAvailable
-                // Keep selection within available.
-                val selected = settingsStore.selectedCategories().intersect(available)
-                settingsStore.saveSelectedCategories(if (selected.isEmpty()) available else selected)
             }
         }
     }

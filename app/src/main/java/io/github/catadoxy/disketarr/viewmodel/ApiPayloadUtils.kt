@@ -134,6 +134,7 @@ internal fun Any?.asSeasonSummaries(): List<SeasonSummary> =
                 row["item"].toStringKeyMapOrNull()?.get("season_number")
                     ?: row["season_number"]
                 ).asIntOrNull() ?: return@mapNotNull null
+            val item = row["item"].toStringKeyMapOrNull()
             SeasonSummary(
                 seasonNumber = seasonNumber,
                 status = row["status"].asIntOrNull(),
@@ -141,6 +142,11 @@ internal fun Any?.asSeasonSummaries(): List<SeasonSummary> =
                 episodesLeft = row["episodes_left"].asIntOrNull(),
                 totalEpisodesLeft = row["total_episodes_left"].asIntOrNull(),
                 nextEpisode = row["next_episode"].asNextEpisodeOrNull(),
+                // Floppy reports the library on a tracked season and leaves it
+                // empty on an untracked one.
+                libraryMediaType = (
+                    item?.get("library_media_type") ?: row["library_media_type"]
+                    )?.toString()?.takeIf { it.isNotBlank() },
             )
         }
         .distinctBy { it.seasonNumber }
@@ -154,10 +160,21 @@ internal fun Any?.asSeasonSummaries(): List<SeasonSummary> =
  * in-progress season is the right target; failing that, the first unstarted
  * season, and finally the latest (a fully watched show).
  */
-internal fun pickDefaultSeason(summaries: List<SeasonSummary>): Int? =
-    // Expand a season only when it still has something to watch. Fully
-    // watched seasons stay collapsed on first open.
-    summaries.firstOrNull { (it.episodesLeft ?: 0) > 0 || it.status == MediaStatus.IN_PROGRESS || it.status == MediaStatus.PLANNING }?.seasonNumber
+internal fun pickDefaultSeason(summaries: List<SeasonSummary>): Int? {
+    // The season being watched is the one with the most watched episodes among
+    // the unfinished ones. The specials usually have none, so they do not win
+    // over the season the user is actually on.
+    val unfinished = summaries.filter {
+        (it.episodesLeft ?: 0) > 0 || it.status == MediaStatus.IN_PROGRESS
+    }
+    unfinished.maxByOrNull { it.progress ?: 0 }?.let { return it.seasonNumber }
+
+    // Nothing is in progress: the first season that still has something to
+    // watch, and otherwise the first unstarted one.
+    return summaries.firstOrNull {
+        (it.episodesLeft ?: 0) > 0 || it.status == MediaStatus.IN_PROGRESS || it.status == MediaStatus.PLANNING
+    }?.seasonNumber
+}
 
 /**
  * Episodes from `.../{season}/episodes/`. [fallbackSeason] is used when a row
@@ -334,6 +351,9 @@ internal fun Any?.asUpcomingItems(): List<SearchResult> {
             image = item["image"]?.toString()?.takeIf { it.isNotBlank() },
             lastWatchedAt = airDate,
             studio = studioOf(item),
+            // The calendar is not media-type specific, so the library is what
+            // separates an anime episode from a TV one.
+            libraryMediaType = item["library_media_type"]?.toString()?.takeIf { it.isNotBlank() },
             nextEpisode = NextEpisode(
                 seasonNumber = seasonNumber,
                 episodeNumber = episodeNumber,
@@ -493,7 +513,15 @@ internal fun List<Map<String, Any?>>.toSearchResults(): List<SearchResult> {
             studio = studioOf(item),
             episodesLeft = (tracked["episodes_left"] ?: item?.get("episodes_left")).asIntOrNull(),
             totalEpisodesLeft = (tracked["total_episodes_left"] ?: item?.get("total_episodes_left")).asIntOrNull(),
+            // Which library this entry lives in. The same title can be tracked
+            // in the TV and the Anime library at once, and only this tells the
+            // two copies apart.
+            libraryMediaType = (
+                item?.get("library_media_type") ?: tracked["library_media_type"]
+                )?.toString()?.takeIf { it.isNotBlank() },
+            // The id of the tracked entry, which a history row points at.
+            trackedId = tracked["id"]?.toString(),
         )
-    }.distinctBy { "${it.source}|${it.mediaType}|${it.mediaId}" }
+    }.distinctBy { "${it.source}|${it.mediaType}|${it.mediaId}|${it.libraryMediaType.orEmpty()}" }
 }
 

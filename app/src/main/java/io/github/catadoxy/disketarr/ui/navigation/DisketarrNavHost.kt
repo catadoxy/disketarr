@@ -27,11 +27,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.catadoxy.disketarr.data.SettingsStore
+import io.github.catadoxy.disketarr.data.model.LibraryType
 import io.github.catadoxy.disketarr.ui.screens.AnimeScreen
 import io.github.catadoxy.disketarr.ui.screens.DetailsScreen
 import io.github.catadoxy.disketarr.ui.screens.MoviesScreen
@@ -50,10 +54,23 @@ private object Routes {
     const val SEARCH = "search"
     const val STATISTICS = "statistics"
     const val SETTINGS = "settings"
-    const val DETAILS = "details/{source}/{mediaType}/{mediaId}"
+    const val DETAILS = "details/{source}/{mediaType}/{mediaId}?library={library}"
 
-    fun details(source: String, mediaType: String, mediaId: String) =
-        "details/$source/${detailRouteMediaType(mediaType)}/$mediaId"
+    /**
+     * The details screen needs the Floppy *library* as well as the media type:
+     * a title can be tracked in the TV and in the Anime library at the same
+     * time, each with its own status and progress, and Floppy answers with the
+     * TV library's copy unless it is told which one is meant.
+     */
+    fun details(source: String, mediaType: String, mediaId: String, library: String? = null): String {
+        val itemType = detailRouteMediaType(mediaType, source)
+        val base = "details/$source/$itemType/$mediaId"
+        val wanted = library?.lowercase()?.takeIf { LibraryType.isSupported(it) } ?: return base
+        // The media type already implies the TV library, so it does not have to
+        // be spelled out.
+        if (wanted == LibraryType.forMediaType(itemType)) return base
+        return "$base?library=$wanted"
+    }
 }
 
 /**
@@ -61,9 +78,13 @@ private object Routes {
  * top-level detail endpoint only accepts supported parent media types. The row's
  * media_id is the parent show ID, so open the show's detail endpoint instead of
  * requesting the unsupported `/media/season/{source}/{id}/` route.
+ *
+ * The path segment is the *item* type: a TMDB anime is a "tv" item even though
+ * the search reports it as "anime", and only MyAnimeList has "anime" items.
  */
-internal fun detailRouteMediaType(mediaType: String): String = when (mediaType.lowercase()) {
+internal fun detailRouteMediaType(mediaType: String, source: String? = null): String = when (mediaType.lowercase()) {
     "season", "episode" -> "tv"
+    "anime" -> if (source?.lowercase() == "mal") "anime" else "tv"
     else -> mediaType
 }
 
@@ -82,11 +103,14 @@ fun DisketarrNavHost(
 
     LaunchedEffect(deepLink) {
         val (source, mediaType, mediaId) = parseDeepLink(deepLink) ?: return@LaunchedEffect
-        navController.navigate(Routes.details(source, mediaType, mediaId)) {
+        navController.navigate(Routes.details(source, mediaType, mediaId, deepLinkLibrary(deepLink))) {
             launchSingleTop = true
         }
     }
-    val selectedCategories = settingsStore.selectedCategories()
+    val categories by settingsStore.categories.collectAsStateWithLifecycle()
+    // The categories that are actually shown: the user's selection, minus the
+    // ones Floppy does not have and the ones its anime setting rules out.
+    val selectedCategories = categories.effective
     val startDestination = if (!settingsStore.isConfigured) {
         Routes.SETUP
     } else if (selectedCategories.contains("tv")) {
@@ -181,9 +205,9 @@ fun DisketarrNavHost(
 
             composable(Routes.SHOWS) {
                 ShowsScreen(
-                    onOpenDetail = { result ->
+                    onOpenDetail = { result, library ->
                         navController.navigate(
-                            Routes.details(result.source, result.mediaType, result.mediaId),
+                            Routes.details(result.source, result.mediaType, result.mediaId, library),
                         )
                     },
                     onOpenSearch = {
@@ -194,9 +218,9 @@ fun DisketarrNavHost(
 
             composable(Routes.MOVIES) {
                 MoviesScreen(
-                    onOpenDetail = { result ->
+                    onOpenDetail = { result, library ->
                         navController.navigate(
-                            Routes.details(result.source, result.mediaType, result.mediaId),
+                            Routes.details(result.source, result.mediaType, result.mediaId, library),
                         )
                     },
                     onOpenSearch = {
@@ -207,9 +231,9 @@ fun DisketarrNavHost(
 
             composable(Routes.ANIME) {
                 AnimeScreen(
-                    onOpenDetail = { result ->
+                    onOpenDetail = { result, library ->
                         navController.navigate(
-                            Routes.details(result.source, result.mediaType, result.mediaId),
+                            Routes.details(result.source, result.mediaType, result.mediaId, library),
                         )
                     },
                     onOpenSearch = {
@@ -220,9 +244,9 @@ fun DisketarrNavHost(
 
             composable(Routes.SEARCH) {
                 SearchScreen(
-                    onResultClick = { result ->
+                    onResultClick = { result, library ->
                         navController.navigate(
-                            Routes.details(result.source, result.mediaType, result.mediaId),
+                            Routes.details(result.source, result.mediaType, result.mediaId, library),
                         )
                     },
                 )
@@ -245,21 +269,36 @@ fun DisketarrNavHost(
                 )
             }
 
-            composable(Routes.DETAILS) { backStackEntry ->
+            composable(
+                Routes.DETAILS,
+                arguments = listOf(
+                    navArgument("source") { type = NavType.StringType },
+                    navArgument("mediaType") { type = NavType.StringType },
+                    navArgument("mediaId") { type = NavType.StringType },
+                    navArgument("library") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { backStackEntry ->
                 val source = backStackEntry.arguments?.getString("source").orEmpty()
                 val mediaType = backStackEntry.arguments?.getString("mediaType").orEmpty()
                 val mediaId = backStackEntry.arguments?.getString("mediaId").orEmpty()
+                val library = backStackEntry.arguments?.getString("library").orEmpty()
                 DetailsScreen(
                     source = source,
                     mediaType = mediaType,
                     mediaId = mediaId,
+                    library = library,
                 )
             }
         }
     }
 }
 
-/** Parses `Disketarr://details/{source}/{mediaType}/{mediaId}` deep links. */
+/**
+ * Parses `Disketarr://details/{source}/{mediaType}/{mediaId}` deep links.
+ *
+ * The Floppy library is optional: `.../{mediaId}?library=anime` picks the Anime
+ * library's copy of a title, which matters for shows tracked in both.
+ */
 private fun parseDeepLink(uri: Uri?): Triple<String, String, String>? {
     if (uri == null || uri.scheme != "disketarr") return null
     // Supported forms:
@@ -278,4 +317,16 @@ private fun parseDeepLink(uri: Uri?): Triple<String, String, String>? {
     val mediaId = Uri.decode(detailSegments[2])
     if (source.isBlank() || mediaType.isBlank() || mediaId.isBlank()) return null
     return Triple(source, mediaType, mediaId)
+}
+
+/**
+ * The Floppy library a deep link points at, if it names one.
+ *
+ * `disketarr://details/tmdb/tv/253811?library=anime` opens the Anime
+ * library's copy of the show.
+ */
+private fun deepLinkLibrary(uri: Uri?): String? {
+    if (uri == null || uri.scheme != "disketarr") return null
+    val requested = uri.getQueryParameter("library") ?: return null
+    return requested.takeIf { LibraryType.isSupported(it) }
 }

@@ -126,23 +126,24 @@ class ConnectionCheckTest {
         override suspend fun listHistory(limit: Int?, offset: Int?) = unsupported()
         override suspend fun listHistoryRaw(limit: Int?, offset: Int?, flat: String?) = unsupported()
         override suspend fun getLists() = unsupported()
-        override suspend fun getMediaDetail(mediaType: String, source: String, mediaId: String) = unsupported()
-        override suspend fun listSeasonsRaw(mediaType: String, source: String, mediaId: String, limit: Int?) = unsupported()
-        override suspend fun listSeasonEpisodesRaw(mediaType: String, source: String, mediaId: String, seasonNumber: Int, limit: Int?, offset: Int?) = unsupported()
-        override suspend fun markEpisodeWatched(mediaType: String, source: String, mediaId: String, seasonNumber: Int, episodeNumber: Int) = unsupported()
-        override suspend fun unmarkEpisodeWatched(mediaType: String, source: String, mediaId: String, seasonNumber: Int, episodeNumber: Int) = unsupported()
+        override suspend fun getMediaDetail(mediaType: String, source: String, mediaId: String, libraryMediaType: String?) = unsupported()
+        override suspend fun listSeasonsRaw(mediaType: String, source: String, mediaId: String, libraryMediaType: String?, limit: Int?) = unsupported()
+        override suspend fun listSeasonEpisodesRaw(mediaType: String, source: String, mediaId: String, seasonNumber: Int, libraryMediaType: String?, limit: Int?, offset: Int?) = unsupported()
+        override suspend fun markEpisodeWatched(mediaType: String, source: String, mediaId: String, seasonNumber: Int, episodeNumber: Int, libraryMediaType: String?) = unsupported()
+        override suspend fun unmarkEpisodeWatched(mediaType: String, source: String, mediaId: String, seasonNumber: Int, episodeNumber: Int, libraryMediaType: String?) = unsupported()
         override suspend fun trackMedia(mediaType: String, request: io.github.catadoxy.disketarr.data.model.TrackMediaRequest) = unsupported()
         override suspend fun updateMediaConsumption(
             mediaType: String,
             source: String,
             mediaId: String,
             consumptionId: String,
+            libraryMediaType: String?,
             request: io.github.catadoxy.disketarr.data.model.MediaUpdateRequest,
         ) = unsupported()
 
         override suspend fun addMediaToList(mediaType: String, source: String, mediaId: String, listId: String, request: Map<String, Any>) = unsupported()
         override suspend fun removeMediaFromList(mediaType: String, source: String, mediaId: String, listId: String) = unsupported()
-        override suspend fun untrackMedia(mediaType: String, source: String, mediaId: String) = unsupported()
+        override suspend fun untrackMedia(mediaType: String, source: String, mediaId: String, libraryMediaType: String?) = unsupported()
 
         private fun unsupported(): Nothing = throw NotImplementedError("not used in these tests")
     }

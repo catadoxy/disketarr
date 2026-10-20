@@ -9,6 +9,7 @@ import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import io.github.catadoxy.disketarr.R
 import io.github.catadoxy.disketarr.data.SettingsStore
+import io.github.catadoxy.disketarr.data.model.LibraryType
 import io.github.catadoxy.disketarr.data.model.SearchResult
 import io.github.catadoxy.disketarr.data.network.ApiClient
 import io.github.catadoxy.disketarr.data.network.DisketarrApiService
@@ -81,8 +82,12 @@ class ShowWidgetFactory(
                             "all" -> null
                             else -> listOf("0", "1")
                         },
-                        limit = 20,
+                        limit = 60,
                     ).extractRowsSafely().toSearchResults()
+                        // Floppy's "tv" list also holds the Anime library's
+                        // entries - a TMDB anime is a "tv" item - so the
+                        // library decides what belongs here.
+                        .filter { it.libraryMediaType == LibraryType.TV }
                     else -> service.upcomingCalendar(month = today.monthValue, year = today.year, limit = 20)
                         .asUpcomingItems()
                         .filter { item ->
@@ -247,6 +252,10 @@ class ShowWidgetFactory(
         putExtra(WidgetActionReceiver.EXTRA_SOURCE, item.source)
         putExtra(WidgetActionReceiver.EXTRA_MEDIA_TYPE, item.mediaType)
         putExtra(WidgetActionReceiver.EXTRA_MEDIA_ID, item.mediaId)
+        // The Floppy library the title lives in. A show can be tracked in the
+        // TV and in the Anime library at once, and the watch has to land in
+        // the same one the row came from.
+        putExtra(WidgetActionReceiver.EXTRA_LIBRARY, item.libraryMediaType.orEmpty())
         putExtra(WidgetActionReceiver.EXTRA_SEASON, item.nextEpisode?.seasonNumber ?: -1)
         putExtra(WidgetActionReceiver.EXTRA_EPISODE, item.nextEpisode?.episodeNumber ?: -1)
     }
@@ -264,7 +273,14 @@ class ShowWidgetFactory(
     }
 
     private companion object {
-        const val MAX_ROWS = 10
+        /**
+         * How many shows the widget loads.
+         *
+         * The list scrolls, so this is not a limit on what the user can see -
+         * it only decides how much is fetched. The Shows tab in the app pages
+         * through the same list, so the widget shows the same shows.
+         */
+        const val MAX_ROWS = 20
         const val LIGHT_ROW = 0xFFF3F4F6.toInt()
         const val DARK_ROW = 0xFF374151.toInt()
         const val LIGHT_PRIMARY = 0xFF111827.toInt()

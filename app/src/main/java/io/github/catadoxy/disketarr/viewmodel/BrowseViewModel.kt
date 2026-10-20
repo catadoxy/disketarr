@@ -6,6 +6,7 @@ import io.github.catadoxy.disketarr.data.AppCacheRepository
 import io.github.catadoxy.disketarr.data.SettingsStore
 import io.github.catadoxy.disketarr.data.repository.DisketarrRepository
 import io.github.catadoxy.disketarr.data.model.DiscoverRail
+import io.github.catadoxy.disketarr.data.model.LibraryType
 import io.github.catadoxy.disketarr.data.model.SearchResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.catadoxy.disketarr.data.network.DisketarrApiService
@@ -55,6 +56,19 @@ val MOVIE_TABS = listOf(
 internal val FILTERABLE_TABS = setOf(BrowseTab.IN_PROGRESS, BrowseTab.WATCHED, BrowseTab.PLANNED)
 
 /**
+ * Whether a calendar entry belongs in the tab of the given media type.
+ *
+ * The calendar is not media-type specific - it returns every episode that
+ * airs - but each entry says which Floppy library it belongs to, and that is
+ * what separates an anime episode from a TV one. An entry without a library is
+ * kept in both, since nothing says otherwise.
+ */
+internal fun belongsInLibrary(library: String?, tabMediaType: String): Boolean {
+    val lib = library ?: return true
+    return if (tabMediaType == LibraryType.ANIME) lib == LibraryType.ANIME else lib != LibraryType.ANIME
+}
+
+/**
  * A finished show is only "watched" when nothing is left, aired or announced.
  * Disketarr keeps [SearchResult.totalEpisodesLeft] for the announced remainder.
  */
@@ -96,6 +110,13 @@ data class BrowseUiState(
     val loading: Boolean = false,
     val error: String? = null,
     val canLoadMore: Boolean = false,
+    /**
+     * How many rows the server has served so far.
+     *
+     * The list is filtered by the library after the fact, so the paging
+     * follows the server's rows, not the ones that are on screen.
+     */
+    val rawOffset: Int = 0,
 )
 
 /**
@@ -117,40 +138,63 @@ open class BrowseViewModel(
     private val pageSize = 60
     private val historyPageSize = 30
 
+    /**
+     * The Floppy library this screen shows.
+     *
+     * The tab is a library, not an item type: the Shows tab is the TV library
+     * and the Anime tab the Anime one. A TMDB anime is a "tv" *item* that lives
+     * in the Anime library, so the two are not the same thing.
+     */
+    private val library: String = LibraryType.forMediaType(mediaType)
+
     /** Cached set of tracked anime show ids (the `id` field), used to split
      *  history between the Shows and Anime tabs. */
     private var animeShowIds: Set<String>? = null
 
-    /** Cached set of tracked anime show media_ids (tmdb ids), used to filter
-     *  the calendar/upcoming feed by show type. */
-    private var animeShowMediaIds: Set<String>? = null
-
     private suspend fun animeShowIds(): Set<String> {
         animeShowIds?.let { return it }
         val ids = runCatching {
-            repository.service().listTrackedMediaRaw(mediaType = "anime", limit = 200)
-                .extractRowsSafely()
-                .mapNotNull { it["id"]?.toString() }
+            trackedMedia(library = LibraryType.ANIME, limit = 200)
+                .rows
+                .mapNotNull { it.trackedId }
                 .toSet()
         }.getOrDefault(emptySet())
         animeShowIds = ids
         return ids
     }
 
-    private suspend fun animeShowMediaIds(): Set<String> {
-        animeShowMediaIds?.let { return it }
-        val ids = runCatching {
-            repository.service().listTrackedMediaRaw(mediaType = "anime", limit = 200)
-                .extractRowsSafely()
-                .mapNotNull { row ->
-                    row["item"].toStringKeyMapOrNull()?.get("media_id")?.toString()
-                }
-                .toSet()
-        }.getOrDefault(emptySet())
-        android.util.Log.d("DisketarrBrowse", "animeShowMediaIds fetched: ${ids.size}")
-        animeShowMediaIds = ids
-        return ids
-    }
+    /**
+     * The item types a library's entries can have.
+     *
+     * Floppy's `media_type` filter is about the item, not the library: a TMDB
+     * anime is a "tv" item, so asking for "tv" also returns the Anime
+     * library's entries. A MAL anime is an "anime" item, so the Anime library
+     * needs both.
+     */
+    private suspend fun trackedMedia(
+        library: String,
+        statuses: List<String>? = null,
+        offset: Int = 0,
+        limit: Int = pageSize,
+        filter: BrowseFilter = BrowseFilter(),
+        sort: String? = null,
+        direction: String? = null,
+    ): TrackedLibrary = trackedMediaOfLibrary(
+        service = repository.service(),
+        library = library,
+        statuses = statuses,
+        limit = limit,
+        offset = offset,
+        rating = filter.rating,
+        ratingMin = filter.ratingMin,
+        genre = filter.genre,
+        year = filter.year,
+        progress = filter.progress,
+        collection = filter.collection,
+        search = filter.query.takeIf { it.isNotBlank() },
+        sort = sort,
+        direction = direction,
+    )
 
     private val _uiState = MutableStateFlow(BrowseUiState(tab = tabs.first()))
     val uiState: StateFlow<BrowseUiState> = _uiState.asStateFlow()
@@ -211,7 +255,7 @@ open class BrowseViewModel(
     fun loadMore() {
         val state = _uiState.value
         if (state.loading || !state.canLoadMore) return
-        load(state.tab, force = true, offset = state.items.size)
+        load(state.tab, force = true, offset = state.rawOffset)
     }
 
     private fun load(tab: BrowseTab, force: Boolean, offset: Int = 0, ) {
@@ -229,6 +273,7 @@ open class BrowseViewModel(
                         filter = _uiState.value.filter,
                         loading = false,
                         canLoadMore = page.hasMore,
+                        rawOffset = offset + page.rawRows,
                     )
                 },
                 onFailure = { error ->
@@ -245,6 +290,8 @@ open class BrowseViewModel(
         val items: List<SearchResult> = emptyList(),
         val rails: List<DiscoverRail> = emptyList(),
         val hasMore: Boolean = false,
+        /** Rows the server served, before the library filter. */
+        val rawRows: Int = 0,
     )
 
     private suspend fun fetch(tab: BrowseTab, force: Boolean, offset: Int): Result<Page> = runCatching {
@@ -282,16 +329,13 @@ open class BrowseViewModel(
                         ).asUpcomingItems()
                     }.orEmpty()
                 }
-                // The calendar is not media-type specific; keep shows only.
-                val animeIds = animeShowMediaIds()
+                // The calendar is not media-type specific, but every episode
+                // says which Floppy library it belongs to - that is what tells
+                // an anime episode from a TV one.
                 Page(
                     items = items
                         .filter { it.mediaType == "episode" || it.mediaType == "tv" }
-                        .filter { item ->
-                            if (animeIds.isEmpty()) true
-                            else if (mediaType == "anime") item.mediaId in animeIds
-                            else item.mediaId !in animeIds
-                        }
+                        .filter { belongsInLibrary(it.libraryMediaType, mediaType) }
                         .filter { airsOnOrAfter(it.nextEpisode?.airDate, today) }
                         .distinctBy { "${it.source}|${it.mediaId}|${it.nextEpisode?.seasonNumber}|${it.nextEpisode?.episodeNumber}" }
                         .sortedBy { it.nextEpisode?.airDate.orEmpty() },
@@ -337,37 +381,31 @@ open class BrowseViewModel(
                     BrowseTab.PLANNED -> listOf("0")
                     else -> listOf("1")
                 }
-                val payload = withTimeoutOrNull(25000) {
-                    service.listTrackedMediaRaw(
-                        mediaType = mediaType,
-                        // The tab fixes the status, so the filter never sets one.
-                        statuses = statuses,
-                        rating = filter.rating,
-                        ratingMin = filter.ratingMin,
-                        genre = filter.genre,
-                        year = filter.year,
-                        // Documented as meaningful for TV/anime only; sending it
-                        // for movies silently returns everything.
-                        progress = filter.progress?.takeIf { mediaType == "tv" || mediaType == "anime" },
-                        collection = filter.collection,
-                        search = filter.query.takeIf { it.isNotBlank() },
-                        sort = filter.sort ?: defaultSort(tab, mediaType),
-                        direction = filter.direction ?: if (filter.sort == null && defaultSort(tab, mediaType) != null) "desc" else null,
-                        limit = pageSize,
-                        offset = offset,
-                    )
-                }
-                val fetched = payload.extractRowsSafely().toSearchResults()
+                val page = trackedMedia(
+                    library = library,
+                    statuses = statuses,
+                    offset = offset,
+                    filter = filter,
+                    sort = filter.sort ?: defaultSort(tab, mediaType),
+                    direction = filter.direction
+                        ?: if (filter.sort == null && defaultSort(tab, mediaType) != null) "desc" else null,
+                )
                 // Completed shows that still have announced episodes belong with
                 // what is coming up, not in the watched list.
                 val items =
-                    if (tab == BrowseTab.WATCHED) fetched.filter { it.hasNothingLeft() } else fetched
-                val total = payload.asPaginationTotalOrNull() ?: fetched.size
-                Page(items = items, hasMore = fetched.isNotEmpty() && offset + fetched.size < total)
+                    if (tab == BrowseTab.WATCHED) page.rows.filter { it.hasNothingLeft() } else page.rows
+                Page(
+                    items = items,
+                    hasMore = page.rows.isNotEmpty() && offset + page.rawRows < page.total,
+                    rawRows = page.rawRows,
+                )
             }
         }
 
-        if (offset == 0) {
+        if (offset == 0 && (page.items.isNotEmpty() || page.rails.isNotEmpty())) {
+            // Only a page with something in it is worth keeping. The history
+            // takes seconds to aggregate, and caching an empty answer would
+            // leave the tab empty until the cache expires.
             appCache.putBrowse(cacheKey, page.items.orEmpty(), page.rails.orEmpty())
         }
         page
