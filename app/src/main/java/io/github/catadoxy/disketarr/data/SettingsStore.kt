@@ -89,13 +89,23 @@ class SettingsStore(context: Context) {
      *
      * Floppy's setting decides whether the app has an Anime tab at all, so it is
      * read from the server and kept here.
+     *
+     * The mode also decides what is in the TV library - with the anime in it,
+     * the TV list holds them - so the screens watch it and reload when it
+     * changes.
      */
-    var animeLibraryMode: String = AnimeLibraryMode.ANIME
+    var animeLibraryMode: String
+        get() = _animeLibraryMode.value
         set(value) {
-            field = value
+            _animeLibraryMode.value = value
             prefs.edit().putString(KEY_ANIME_LIBRARY_MODE, value).apply()
             refreshCategories()
         }
+
+    private val _animeLibraryMode = MutableStateFlow(AnimeLibraryMode.ANIME)
+
+    /** The mode as a flow, so the screens can react to it changing. */
+    val animeLibraryModeFlow: StateFlow<String> = _animeLibraryMode.asStateFlow()
 
     /**
      * The categories the app shows.

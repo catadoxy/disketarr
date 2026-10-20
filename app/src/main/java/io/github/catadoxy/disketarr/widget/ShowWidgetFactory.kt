@@ -84,10 +84,10 @@ class ShowWidgetFactory(
                         },
                         limit = 60,
                     ).extractRowsSafely().toSearchResults()
-                        // Floppy's "tv" list also holds the Anime library's
-                        // entries - a TMDB anime is a "tv" item - so the
-                        // library decides what belongs here.
-                        .filter { it.libraryMediaType == LibraryType.TV }
+                        // The list is the TV library, and Floppy files the anime
+                        // in it when the user sets the anime library to TV - so
+                        // the list is what belongs here, not the item's own
+                        // library field.
                     else -> service.upcomingCalendar(month = today.monthValue, year = today.year, limit = 20)
                         .asUpcomingItems()
                         .filter { item ->
@@ -143,11 +143,16 @@ class ShowWidgetFactory(
 
     private suspend fun enrichShow(service: DisketarrApiService, item: SearchResult): SearchResult {
         val known = item.nextEpisode
+        // A show's seasons live in their own library - the TV Seasons library
+        // for a TV show, the Anime library for an anime - and asking for the
+        // wrong one hides the watched state.
+        val seasonLibrary = LibraryType.seasonLibrary(item.libraryMediaType)
+        val episodeLibrary = LibraryType.episodeLibrary(item.libraryMediaType)
         val next = if (known?.seasonNumber != null && known.episodeNumber != null) {
             known
         } else {
             runCatching {
-                service.listSeasonsRaw(item.mediaType, item.source, item.mediaId)
+                service.listSeasonsRaw(item.mediaType, item.source, item.mediaId, seasonLibrary)
                     .asSeasonSummaries()
                     .mapNotNull { it.nextEpisode }
                     .firstOrNull()
@@ -159,7 +164,7 @@ class ShowWidgetFactory(
         if (next.airDate != null) return item.copy(nextEpisode = next)
 
         val airDate = runCatching {
-            service.listSeasonEpisodesRaw(item.mediaType, item.source, item.mediaId, season)
+            service.listSeasonEpisodesRaw(item.mediaType, item.source, item.mediaId, season, episodeLibrary)
                 .asSeasonEpisodes(season)
                 .firstOrNull { it.episodeNumber == number }
                 ?.airDate

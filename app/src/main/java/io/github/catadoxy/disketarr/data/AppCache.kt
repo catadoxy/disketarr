@@ -189,6 +189,22 @@ class AppCacheRepository @Inject constructor(
         diskCache?.clear()
     }
 
+    /**
+     * Drops the cached library pages.
+     *
+     * The lists depend on Floppy's settings - the anime move between the TV and
+     * the Anime library when the user changes the anime library mode - so a
+     * cached page can be wrong. The details and the statistics stay: they are
+     * about a single title, not about the library it sits in.
+     */
+    @Synchronized
+    fun invalidateBrowse() {
+        homePages.clear()
+        browsePages.clear()
+        diskCache?.removeByPrefix("browse|")
+        diskCache?.removeByPrefix("home|")
+    }
+
     // ---- statistics -------------------------------------------------------
 
     @Synchronized

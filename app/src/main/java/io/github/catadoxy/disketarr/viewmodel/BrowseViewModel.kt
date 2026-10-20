@@ -62,9 +62,17 @@ internal val FILTERABLE_TABS = setOf(BrowseTab.IN_PROGRESS, BrowseTab.WATCHED, B
  * airs - but each entry says which Floppy library it belongs to, and that is
  * what separates an anime episode from a TV one. An entry without a library is
  * kept in both, since nothing says otherwise.
+ *
+ * With the anime in the TV library there is no Anime tab, and Floppy shows
+ * their episodes with the TV ones - so everything goes to the TV tab then.
  */
-internal fun belongsInLibrary(library: String?, tabMediaType: String): Boolean {
+internal fun belongsInLibrary(
+    library: String?,
+    tabMediaType: String,
+    mode: String? = null,
+): Boolean {
     val lib = library ?: return true
+    if (mode == AnimeLibraryMode.TV) return tabMediaType != LibraryType.ANIME
     return if (tabMediaType == LibraryType.ANIME) lib == LibraryType.ANIME else lib != LibraryType.ANIME
 }
 
@@ -120,6 +128,24 @@ data class BrowseUiState(
 )
 
 /**
+ * The cache key of a browse page.
+ *
+ * Floppy's anime library mode is part of it: with the anime filed in the TV
+ * library, the TV list holds them - so a page cached under the old mode is
+ * wrong and must not be served.
+ */
+internal fun browseCacheKey(
+    mediaType: String,
+    mode: String,
+    filter: BrowseFilter,
+    tab: BrowseTab,
+): String = if (mediaType == LibraryType.MOVIE) {
+    "$mediaType|${filter.cacheKey(tab)}"
+} else {
+    "$mediaType|$mode|${filter.cacheKey(tab)}"
+}
+
+/**
  * Backs both the Shows and Movies screens. The only difference is the media type
  * and the tab set, so the fetch logic lives here once.
  */
@@ -151,6 +177,15 @@ open class BrowseViewModel(
      *  history between the Shows and Anime tabs. */
     private var animeShowIds: Set<String>? = null
 
+    /**
+     * The anime library mode the loaded page was fetched for.
+     *
+     * Floppy files the anime in the TV library or in the Anime library, and
+     * the two hold different titles - so a page fetched under one mode is
+     * wrong under the other.
+     */
+    private var animeLibraryMode: String = settingsStore.animeLibraryMode
+
     private suspend fun animeShowIds(): Set<String> {
         animeShowIds?.let { return it }
         val ids = runCatching {
@@ -164,12 +199,12 @@ open class BrowseViewModel(
     }
 
     /**
-     * The item types a library's entries can have.
+     * The tracked entries of one Floppy library.
      *
-     * Floppy's `media_type` filter is about the item, not the library: a TMDB
-     * anime is a "tv" item, so asking for "tv" also returns the Anime
-     * library's entries. A MAL anime is an "anime" item, so the Anime library
-     * needs both.
+     * Floppy's list endpoint is filtered by library, so the library - not the
+     * item type - is what says where a title belongs. The anime move between
+     * the TV and the Anime library when the user changes Floppy's *anime
+     * library mode*.
      */
     private suspend fun trackedMedia(
         library: String,
@@ -206,6 +241,19 @@ open class BrowseViewModel(
     init {
         _uiState.value = BrowseUiState(tab = tabs.first(), filter = loadSavedFilter())
         load(tabs.first(), force = false)
+        // Floppy's anime library mode decides what is in a library, so a
+        // change to it makes the loaded page wrong.
+        viewModelScope.launch {
+            settingsStore.animeLibraryModeFlow.collect { mode ->
+                if (mode == animeLibraryMode) return@collect
+                animeLibraryMode = mode
+                // The libraries hold different titles now, so the cached pages
+                // and the known anime shows are stale.
+                appCache.invalidateBrowse()
+                animeShowIds = null
+                load(_uiState.value.tab, force = true)
+            }
+        }
     }
 
     fun selectTab(tab: BrowseTab) {
@@ -273,7 +321,7 @@ open class BrowseViewModel(
                         filter = _uiState.value.filter,
                         loading = false,
                         canLoadMore = page.hasMore,
-                        rawOffset = offset + page.rawRows,
+                        rawOffset = offset + page.items.size,
                     )
                 },
                 onFailure = { error ->
@@ -290,14 +338,12 @@ open class BrowseViewModel(
         val items: List<SearchResult> = emptyList(),
         val rails: List<DiscoverRail> = emptyList(),
         val hasMore: Boolean = false,
-        /** Rows the server served, before the library filter. */
-        val rawRows: Int = 0,
     )
 
     private suspend fun fetch(tab: BrowseTab, force: Boolean, offset: Int): Result<Page> = runCatching {
         val service = repository.service()
         val filter = _uiState.value.filter
-        val cacheKey = "${mediaType}|${filter.cacheKey(tab)}"
+        val cacheKey = browseCacheKey(mediaType, animeLibraryMode, filter, tab)
 
         if (!force && offset == 0) {
             appCache.browse(cacheKey)?.let { cached ->
@@ -335,7 +381,7 @@ open class BrowseViewModel(
                 Page(
                     items = items
                         .filter { it.mediaType == "episode" || it.mediaType == "tv" }
-                        .filter { belongsInLibrary(it.libraryMediaType, mediaType) }
+                        .filter { belongsInLibrary(it.libraryMediaType, mediaType, animeLibraryMode) }
                         .filter { airsOnOrAfter(it.nextEpisode?.airDate, today) }
                         .distinctBy { "${it.source}|${it.mediaId}|${it.nextEpisode?.seasonNumber}|${it.nextEpisode?.episodeNumber}" }
                         .sortedBy { it.nextEpisode?.airDate.orEmpty() },
@@ -396,8 +442,7 @@ open class BrowseViewModel(
                     if (tab == BrowseTab.WATCHED) page.rows.filter { it.hasNothingLeft() } else page.rows
                 Page(
                     items = items,
-                    hasMore = page.rows.isNotEmpty() && offset + page.rawRows < page.total,
-                    rawRows = page.rawRows,
+                    hasMore = page.rows.isNotEmpty() && offset + page.rows.size < page.total,
                 )
             }
         }

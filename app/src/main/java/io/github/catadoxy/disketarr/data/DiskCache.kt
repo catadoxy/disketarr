@@ -41,6 +41,12 @@ class DiskCache @Inject constructor(
             .onFailure { android.util.Log.w("DiskCache", "remove failed for $key", it) }
     }
 
+    /** Drops every entry whose key starts with [prefix]. */
+    fun removeByPrefix(prefix: String) {
+        runCatching { runBlocking { dao.removeByPrefix(prefix) } }
+            .onFailure { android.util.Log.w("DiskCache", "removeByPrefix failed for $prefix", it) }
+    }
+
     fun clear() {
         runCatching { runBlocking { dao.clear() } }
             .onFailure { android.util.Log.w("DiskCache", "clear failed", it) }

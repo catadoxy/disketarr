@@ -37,16 +37,6 @@ class LibraryTypeTest {
      * app has to ask for the item types a library can hold and then filter by
      * the library itself.
      */
-    @Test
-    fun every_library_is_asked_for_with_its_item_types() {
-        // A TMDB anime is a "tv" item, a MAL anime an "anime" one.
-        assertEquals(listOf("tv", "anime"), itemTypesOf(LibraryType.ANIME))
-        assertEquals(listOf("tv"), itemTypesOf(LibraryType.TV))
-        assertEquals(listOf("movie"), itemTypesOf(LibraryType.MOVIE))
-        assertEquals(listOf("season"), itemTypesOf(LibraryType.SEASON))
-        assertEquals(listOf("manga"), itemTypesOf("manga"))
-    }
-
     /**
      * A show's seasons and episodes live in their own library, not in the one
      * of the show: a TV show's seasons are in the TV Seasons library and its

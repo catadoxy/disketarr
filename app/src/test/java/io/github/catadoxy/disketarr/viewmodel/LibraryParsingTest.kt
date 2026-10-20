@@ -3,6 +3,7 @@ package io.github.catadoxy.disketarr.viewmodel
 import io.github.catadoxy.disketarr.data.model.LibraryType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -73,10 +74,44 @@ class LibraryParsingTest {
         assertFalse(belongsInLibrary(LibraryType.SEASON, LibraryType.ANIME))
     }
 
+    /**
+     * With the anime in the TV library there is no Anime tab, and Floppy shows
+     * their episodes with the TV ones.
+     */
+    @Test
+    fun with_the_anime_in_the_tv_library_everything_goes_to_the_tv_tab() {
+        val mode = AnimeLibraryMode.TV
+
+        assertTrue(belongsInLibrary(LibraryType.ANIME, LibraryType.TV, mode))
+        assertTrue(belongsInLibrary(LibraryType.SEASON, LibraryType.TV, mode))
+        assertFalse(belongsInLibrary(LibraryType.ANIME, LibraryType.ANIME, mode))
+        assertTrue(belongsInLibrary(null, LibraryType.TV, mode))
+    }
+
     @Test
     fun a_calendar_entry_without_a_library_stays_in_both_tabs() {
         assertTrue(belongsInLibrary(null, LibraryType.ANIME))
         assertTrue(belongsInLibrary(null, LibraryType.TV))
+    }
+
+    /**
+     * The anime library mode decides what is in the TV library, so a page
+     * cached under one mode must not be served under the other.
+     */
+    @Test
+    fun the_cache_key_follows_the_anime_library_mode() {
+        val filter = BrowseFilter()
+        val tab = BrowseTab.IN_PROGRESS
+
+        val inAnime = browseCacheKey("tv", AnimeLibraryMode.ANIME, filter, tab)
+        val inTv = browseCacheKey("tv", AnimeLibraryMode.TV, filter, tab)
+
+        assertNotEquals(inAnime, inTv)
+        // The movies do not care about the anime, so their pages are shared.
+        assertEquals(
+            browseCacheKey("movie", AnimeLibraryMode.ANIME, filter, tab),
+            browseCacheKey("movie", AnimeLibraryMode.TV, filter, tab),
+        )
     }
 
     private fun trackedMediaPayload() = linkedMapOf<String, Any?>(

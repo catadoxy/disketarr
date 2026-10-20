@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
+import io.github.catadoxy.disketarr.data.AppCacheRepository
 import io.github.catadoxy.disketarr.data.SettingsStore
 import io.github.catadoxy.disketarr.data.repository.DisketarrRepository
 import io.github.catadoxy.disketarr.ui.navigation.DisketarrNavHost
@@ -29,6 +30,14 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var settingsStore: SettingsStore
+
+    /**
+     * The shared cache.
+     *
+     * The ViewModels read their pages from it, so dropping the cached ones
+     * here is what makes a changed Floppy setting show up on screen.
+     */
+    @Inject lateinit var appCache: AppCacheRepository
 
     private val _themeState = MutableStateFlow("")
     val themeState: StateFlow<String> = _themeState.asStateFlow()
@@ -73,8 +82,11 @@ class MainActivity : ComponentActivity() {
             if (!settingsStore.isConfigured) return@launch
             val mode = runCatching {
                 AnimeLibraryMode.read(DisketarrRepository(settingsStore).service())
-            }.getOrNull()
-            if (mode != null) settingsStore.animeLibraryMode = mode
+            }.getOrNull() ?: return@launch
+            if (mode == settingsStore.animeLibraryMode) return@launch
+            settingsStore.animeLibraryMode = mode
+            // The library lists follow the mode, so the cached ones are stale.
+            appCache.invalidateBrowse()
         }
     }
 

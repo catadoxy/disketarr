@@ -16,6 +16,10 @@ interface CacheDao {
     @Query("DELETE FROM cache_entries WHERE key = :key")
     suspend fun remove(key: String)
 
+    /** Drops every entry whose key starts with the given prefix. */
+    @Query("DELETE FROM cache_entries WHERE key LIKE :prefix || '%'")
+    suspend fun removeByPrefix(prefix: String)
+
     @Query("DELETE FROM cache_entries")
     suspend fun clear()
 }
