@@ -175,6 +175,7 @@ internal fun Any?.asSeasonEpisodes(fallbackSeason: Int? = null): List<SeasonEpis
                 title = item["title"]?.toString()?.takeIf { it.isNotBlank() },
                 airDate = item["release_datetime"]?.toString()?.takeIf { it.isNotBlank() },
                 runtimeMinutes = item["runtime_minutes"].asIntOrNull()?.takeIf { it in 1..600 },
+                status = row["status"].asIntOrNull(),
                 watched = row["status"].asIntOrNull() == MediaStatus.COMPLETED,
             )
         }

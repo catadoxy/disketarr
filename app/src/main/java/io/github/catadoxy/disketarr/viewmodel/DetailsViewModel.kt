@@ -147,6 +147,10 @@ class DetailsViewModel @Inject constructor(
     private val watchedEpisodeKeys: MutableSet<String> =
         settingsStore.watchedEpisodeKeys().toMutableSet()
 
+    /** Total episodes watched for this show (from Floppy's max_progress). Used
+     *  as a heuristic for shows whose episodes aren't tracked individually. */
+    private var showMaxProgress: Int = 0
+
     private val _uiState = MutableStateFlow<DetailsUiState>(DetailsUiState.Loading)
     val uiState: StateFlow<DetailsUiState> = _uiState.asStateFlow()
 
@@ -206,6 +210,9 @@ class DetailsViewModel @Inject constructor(
                 withContext(Dispatchers.IO) {
                     val service = repository.service()
                     val detail = service.getMediaDetail(mediaType = mediaType, source = source, mediaId = mediaId)
+                    showMaxProgress = detail.maxProgress ?: 0
+                    try { java.io.File("/sdcard/showMaxProgress.txt").writeText("showMaxProgress=$showMaxProgress mediaId=$mediaId") } catch (e: Exception) {}
+                    
 
                     // A show's detail payload only carries an aggregate season
                     // count, so the real seasons and episodes come from their own
@@ -225,23 +232,9 @@ class DetailsViewModel @Inject constructor(
                         episodes = episodes,
                     )
 
-                    // Fetch history in the background to mark already-watched episodes
-                    // for shows whose episodes aren't tracked individually.
-                    if (isShowMediaType(mediaType)) {
-                        viewModelScope.launch {
-                            try {
-                                val historyWatched = watchedEpisodesFromHistory(repository.service(), mediaId)
-                                if (historyWatched.isEmpty()) return@launch
-                                val current = _uiState.value as? DetailsUiState.Success ?: return@launch
-                                if (current.detail.mediaId != mediaId) return@launch
-                                val updated = current.episodes.map { ep ->
-                                    val isWatched = ep.watched || historyWatched.contains("${ep.seasonNumber}|${ep.episodeNumber}")
-                                    if (isWatched == ep.watched) ep else ep.copy(watched = isWatched)
-                                }
-                                _uiState.value = current.copy(episodes = updated)
-                            } catch (e: Exception) { /* ignore */ }
-                        }
-                    }
+                    // Watched state for anime episodes is derived from max_progress
+                    // (see loadSeasons) plus locally tracked marks; no background
+                    // history fetch needed.
 
                     appCache.putDetails(
                         cacheKey,
@@ -267,6 +260,7 @@ class DetailsViewModel @Inject constructor(
         mediaId: String,
     ): Triple<List<SeasonSummary>, Int?, List<SeasonEpisode>> {
         val apiType = apiMediaType(mediaType)
+
         val summaries = runCatching {
             service.listSeasonsRaw(mediaType = apiMediaType(mediaType), source = source, mediaId = mediaId).asSeasonSummaries()
         }.getOrElse { emptyList() }.let { seasons ->
@@ -276,7 +270,37 @@ class DetailsViewModel @Inject constructor(
         val selected = pickDefaultSeason(summaries)
             ?: return Triple(summaries, null, emptyList())
 
-        val episodes = runCatching {
+        // For shows whose episodes aren't tracked individually, use max_progress
+        // as a heuristic: episodes are watched in order, so the first
+        // showMaxProgress episodes (across seasons) are marked watched.
+        val watchedPerSeason: Map<Int, Int> = if (showMaxProgress > 0) {
+            val sortedSeasons = summaries.sortedBy { it.seasonNumber }
+            var cumulative = 0
+            val result = mutableMapOf<Int, Int>()
+            for (s in sortedSeasons) {
+                val count = runCatching {
+                    service.listSeasonEpisodesRaw(
+                        mediaType = apiType,
+                        source = source,
+                        mediaId = mediaId,
+                        seasonNumber = s.seasonNumber,
+                        limit = 1,
+                    )["pagination"]?.toStringKeyMapOrNull()?.get("total")?.asIntOrNull() ?: 0
+                }.getOrDefault(0)
+                val watched = (showMaxProgress - cumulative).coerceIn(0, count)
+                result[s.seasonNumber] = watched
+                cumulative += count
+            }
+            result
+        } else emptyMap()
+
+        val watchedInSelectedSeason = watchedPerSeason[selected] ?: 0
+
+        // placeholder2 replaced
+
+
+
+        val rawEpisodes = runCatching {
             val all = mutableListOf<SeasonEpisode>()
             var offset = 0
             while (true) {
@@ -293,12 +317,34 @@ class DetailsViewModel @Inject constructor(
                 offset += page.size
             }
             all
-        }.getOrElse { emptyList() }.map { ep ->
+        }.getOrElse { emptyList() }
+
+        // Override progress for shows where the API's progress is stale or missing.
+        // For anime, the API reports a low/incorrect progress (or null) while
+        // max_progress reflects the true watched count.
+        val selectedSummaryProgress = summaries.find { it.seasonNumber == selected }?.progress
+        val apiProgress = selectedSummaryProgress ?: 0
+        val overrideProgress = showMaxProgress > 0 && showMaxProgress > apiProgress
+        val updatedSummaries = if (overrideProgress) {
+            summaries.map { s ->
+                s.copy(progress = watchedPerSeason[s.seasonNumber] ?: s.progress, episodesLeft = 0)
+            }
+        } else summaries
+
+        val episodes = rawEpisodes.mapIndexed { index, ep ->
             val key = episodeKey(mediaType, source, mediaId, ep.seasonNumber ?: selected, ep.episodeNumber)
-            if (ep.watched) ep else ep.copy(watched = watchedEpisodeKeys.contains(key))
+            val isWatched = ep.watched ||
+                (showMaxProgress > 0 && (index + 1) <= watchedInSelectedSeason) ||
+                watchedEpisodeKeys.contains(key)
+            if (isWatched == ep.watched) ep else ep.copy(watched = isWatched)
         }
 
-        return Triple(summaries, selected, episodes)
+
+        // Override progress when the API's value is missing or inconsistent
+        // with the max_progress heuristic (e.g. anime shows where the API
+        // reports a stale/low progress).
+
+        return Triple(updatedSummaries, selected, episodes)
     }
 
     /** Tap a season header to expand it; tap again to collapse it. */
@@ -320,9 +366,6 @@ class DetailsViewModel @Inject constructor(
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 val apiType = apiMediaType(mediaType)
-                val historyWatched = if (mediaType.lowercase() == "anime" || mediaType.lowercase() == "tv") {
-                    watchedEpisodesFromHistory(repository.service(), mediaId)
-                } else emptySet()
                 val episodes = runCatching {
                     val service = repository.service()
                     val all = mutableListOf<SeasonEpisode>()
@@ -340,10 +383,26 @@ class DetailsViewModel @Inject constructor(
                         if (page.size < 200) break
                         offset += page.size
                     }
-                    all.map { ep ->
+                    // Compute watched count for this season using max_progress.
+                    val sortedSeasons = (uiState.value as? DetailsUiState.Success)?.seasons?.sortedBy { it.seasonNumber } ?: emptyList()
+                    var cumulative = 0
+                    var watchedInThisSeason = 0
+                    for (s in sortedSeasons) {
+                        val count = if (s.seasonNumber == season) all.size else runCatching {
+                            service.listSeasonEpisodesRaw(mediaType = apiType, source = source, mediaId = mediaId, seasonNumber = s.seasonNumber, limit = 1)["pagination"]?.toStringKeyMapOrNull()?.get("total")?.asIntOrNull() ?: 0
+                        }.getOrDefault(0)
+                        if (s.seasonNumber == season) {
+                            watchedInThisSeason = (showMaxProgress - cumulative).coerceIn(0, all.size)
+                            break
+                        }
+                        cumulative += count
+                    }
+                    all.mapIndexed { index, ep ->
                         val key = episodeKey(mediaType, source, mediaId, ep.seasonNumber ?: season, ep.episodeNumber)
-                        val isWatched = ep.watched || historyWatched.contains("${ep.seasonNumber ?: season}|${ep.episodeNumber}") || watchedEpisodeKeys.contains(key)
-                        ep.copy(watched = isWatched)
+                        val isWatched = ep.watched ||
+                            (showMaxProgress > 0 && (index + 1) <= watchedInThisSeason) ||
+                            watchedEpisodeKeys.contains(key)
+                        if (isWatched == ep.watched) ep else ep.copy(watched = isWatched)
                     }
                 }.getOrElse { emptyList() }
 

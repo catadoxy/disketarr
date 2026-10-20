@@ -14,6 +14,7 @@ data class SeasonEpisode(
     val title: String? = null,
     val airDate: String? = null,
     val runtimeMinutes: Int? = null,
+    val status: Int? = null,
     val watched: Boolean = false,
 ) {
     /** "1x01" */
