@@ -110,6 +110,33 @@ is stored in EncryptedSharedPreferences on the device.
 Pushing a tag starting with `v` (e.g. `v0.3.0`) triggers the GitHub Actions release
 workflow, which builds the release APK and attaches it to a GitHub Release.
 
+### Release signing
+
+The APK must be signed with a **stable key**: Android only accepts an update
+when it carries the same certificate as the installed app, so a key that
+changes per release makes every new version uninstallable over the old one
+("App not installed as package conflicts with an existing package").
+
+The release key lives outside the repository, in the repository secrets:
+
+| Secret | Value |
+| --- | --- |
+| `RELEASE_STORE_BASE64` | `base64 -w0 release.jks` |
+| `RELEASE_STORE_PASSWORD` | The keystore password |
+| `RELEASE_KEY_ALIAS` | The key alias, e.g. `disketarr` |
+| `RELEASE_KEY_PASSWORD` | The key password |
+
+Without them the workflow falls back to the *debug* key of the runner, which
+changes whenever the runner image is refreshed - so the first release with a
+real key needs a one-time uninstall on every device.
+
+To build a signed release locally, put the same values in a git-ignored
+`keystore.properties` and in the environment (`RELEASE_STORE_FILE`,
+`RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`).
+
+**Keep `release.jks` and its passwords somewhere safe** (a password manager):
+without them the app can never be updated in place again.
+
 ## Project Structure
 
 - `app/src/main/java/io/github/catadoxy/disketarr/ui` — screens, navigation, theme
