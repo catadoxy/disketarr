@@ -47,6 +47,22 @@ class LibraryTypeTest {
         assertEquals(listOf("manga"), itemTypesOf("manga"))
     }
 
+    /**
+     * A show's seasons and episodes live in their own library, not in the one
+     * of the show: a TV show's seasons are in the TV Seasons library and its
+     * episodes in the episode library, while an anime keeps everything in the
+     * Anime library. Asking for the wrong one hides the watched state.
+     */
+    @Test
+    fun seasons_and_episodes_are_asked_for_in_their_own_library() {
+        assertEquals(LibraryType.SEASON, LibraryType.seasonLibrary(LibraryType.TV))
+        assertEquals(LibraryType.EPISODE, LibraryType.episodeLibrary(LibraryType.TV))
+        assertEquals(LibraryType.ANIME, LibraryType.seasonLibrary(LibraryType.ANIME))
+        assertEquals(LibraryType.ANIME, LibraryType.episodeLibrary(LibraryType.ANIME))
+        assertNull(LibraryType.seasonLibrary(LibraryType.MOVIE))
+        assertNull(LibraryType.episodeLibrary(LibraryType.MOVIE))
+    }
+
     @Test
     fun only_the_anime_library_has_to_be_asked_for_by_name() {
         // The detail routes name the library, so every library is sent.

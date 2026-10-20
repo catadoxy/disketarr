@@ -21,8 +21,9 @@ object LibraryType {
     const val ANIME = "anime"
     const val MOVIE = "movie"
     const val SEASON = "season"
+    const val EPISODE = "episode"
 
-    private val ALL = setOf(TV, ANIME, MOVIE, SEASON)
+    private val ALL = setOf(TV, ANIME, MOVIE, SEASON, EPISODE)
 
     /**
      * The library a title belongs in when the user browses it by media type.
@@ -47,4 +48,30 @@ object LibraryType {
      */
     fun apiParam(library: String?): String? =
         library?.lowercase()?.takeIf { it in ALL }
+
+    /**
+     * The library a show's seasons live in.
+     *
+     * Floppy files a tracked title in the library it was added to, and its
+     * seasons in the matching place: a TV show's seasons are in the TV Seasons
+     * library, while an anime keeps its seasons in the Anime library.
+     */
+    fun seasonLibrary(library: String?): String? = when (library?.lowercase()) {
+        ANIME -> ANIME
+        TV -> SEASON
+        else -> null
+    }
+
+    /**
+     * The library a show's episodes live in.
+     *
+     * The episodes of a TV show are individual entries, so they are in the
+     * episode library, while an anime's stay in the Anime library with the rest
+     * of the show.
+     */
+    fun episodeLibrary(library: String?): String? = when (library?.lowercase()) {
+        ANIME -> ANIME
+        TV -> EPISODE
+        else -> null
+    }
 }

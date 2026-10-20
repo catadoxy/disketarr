@@ -196,16 +196,6 @@ class DetailsViewModel @Inject constructor(
      */
     private var library: String = LibraryType.TV
 
-    /**
-     * The `library_media_type` to send with a request.
-     *
-     * Only the Anime library needs one: Floppy's default answer is the TV
-     * library together with the TV Seasons library, which is what a show
-     * tracked as a show or per season needs.
-     */
-    private val libraryParam: String?
-        get() = LibraryType.apiParam(library)
-
     private val _uiState = MutableStateFlow<DetailsUiState>(DetailsUiState.Loading)
     val uiState: StateFlow<DetailsUiState> = _uiState.asStateFlow()
 
@@ -344,7 +334,10 @@ class DetailsViewModel @Inject constructor(
                 mediaType = apiMediaType(mediaType, source),
                 source = source,
                 mediaId = mediaId,
-                libraryMediaType = libraryParam,
+                // The seasons of a show live in their own library, not in the
+                // one of the show: a TV show's seasons are in the TV Seasons
+                // library, an anime's in the Anime library.
+                libraryMediaType = LibraryType.seasonLibrary(library),
             ).asSeasonSummaries()
         }.getOrElse { emptyList() }.let { seasons ->
             if (settingsStore.hideSpecialEpisodes) seasons.filter { it.seasonNumber != 0 } else seasons
@@ -362,7 +355,7 @@ class DetailsViewModel @Inject constructor(
                     source = source,
                     mediaId = mediaId,
                     seasonNumber = selected,
-                    libraryMediaType = libraryParam,
+                    libraryMediaType = LibraryType.episodeLibrary(library),
                     limit = 200,
                     offset = offset,
                 ).asSeasonEpisodes(fallbackSeason = selected)
@@ -417,7 +410,7 @@ class DetailsViewModel @Inject constructor(
                             source = source,
                             mediaId = mediaId,
                             seasonNumber = season,
-                            libraryMediaType = libraryParam,
+                            libraryMediaType = LibraryType.episodeLibrary(library),
                             limit = 200,
                             offset = offset,
                         ).asSeasonEpisodes(fallbackSeason = season)
@@ -588,7 +581,7 @@ class DetailsViewModel @Inject constructor(
                             mediaId = mediaId,
                             seasonNumber = season,
                             episodeNumber = episode.episodeNumber,
-                            libraryMediaType = libraryParam,
+                            libraryMediaType = LibraryType.episodeLibrary(library),
                         )
                     } else {
                         service.markEpisodeWatched(
@@ -597,7 +590,7 @@ class DetailsViewModel @Inject constructor(
                             mediaId = mediaId,
                             seasonNumber = season,
                             episodeNumber = episode.episodeNumber,
-                            libraryMediaType = libraryParam,
+                            libraryMediaType = LibraryType.episodeLibrary(library),
                         )
                     }
 
@@ -630,7 +623,7 @@ class DetailsViewModel @Inject constructor(
                                 source = source,
                                 mediaId = mediaId,
                                 seasonNumber = season,
-                                libraryMediaType = libraryParam,
+                                libraryMediaType = LibraryType.episodeLibrary(library),
                                 limit = 200,
                                 offset = offset,
                             ).asSeasonEpisodes(fallbackSeason = season)
@@ -683,7 +676,7 @@ class DetailsViewModel @Inject constructor(
                         source = source,
                         mediaId = mediaId,
                         consumptionId = existing.consumptionId.toString(),
-                        libraryMediaType = libraryParam,
+                        libraryMediaType = LibraryType.episodeLibrary(library),
                         request = buildMediaUpdateRequest(
                             score = existing.score,
                             status = MediaStatus.COMPLETED,
@@ -739,7 +732,7 @@ class DetailsViewModel @Inject constructor(
                         source = source,
                         mediaId = mediaId,
                         consumptionId = existing.consumptionId.toString(),
-                        libraryMediaType = libraryParam,
+                        libraryMediaType = LibraryType.episodeLibrary(library),
                         request = buildMediaUpdateRequest(
                             score = score,
                             status = existing.status,
@@ -838,7 +831,7 @@ class DetailsViewModel @Inject constructor(
                         source = source,
                         mediaId = mediaId,
                         consumptionId = existing.consumptionId.toString(),
-                        libraryMediaType = libraryParam,
+                        libraryMediaType = LibraryType.episodeLibrary(library),
                         request = buildMediaUpdateRequest(
                             score = existing.score,
                             status = MediaStatus.PLANNING,
@@ -872,7 +865,7 @@ class DetailsViewModel @Inject constructor(
                         mediaType = mediaType,
                         source = source,
                         mediaId = mediaId,
-                        libraryMediaType = libraryParam,
+                        libraryMediaType = LibraryType.episodeLibrary(library),
                     )
                     if (!response.isSuccessful && response.code() != 204) {
                         _actionMessage.value = "Untrack failed: HTTP ${response.code()}"
