@@ -62,13 +62,13 @@ under **Floppy → Settings → Integrations → App tokens**, and tick exactly 
 
 | Scope | What the app uses it for |
 | --- | --- |
-| `watchlist:read` | The library: the Shows/Movies/Anime tabs, tracked-media lists, details, seasons and episodes, history, and the calendar behind the Upcoming tab |
-| `watchlist:write` | Tracking and untracking a title, marking an episode watched or unwatched, and rating |
 | `catalog:read` | Search and the Discover rows |
 | `lists:read` | The list of your Floppy lists, for "add to list" |
 | `lists:write` | Adding a title to one of your lists |
 | `statistics:read` | The Statistics tab |
 | `user:read` | Reading Floppy's *anime library mode*, which decides whether the app shows an Anime tab |
+| `watchlist:read` | The library: the Shows/Movies/Anime tabs, tracked-media lists, details, seasons and episodes, history, and the calendar behind the Upcoming tab |
+| `watchlist:write` | Tracking and untracking a title, marking an episode watched or unwatched, and rating |
 
 Floppy's default **Tracking** preset only covers `watchlist:read/write` and
 `catalog:read`. The other four have to be ticked as well, or the matching part

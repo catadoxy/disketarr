@@ -63,7 +63,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -71,6 +70,7 @@ import io.github.catadoxy.disketarr.MainActivity
 
 import io.github.catadoxy.disketarr.data.model.LibraryMediaTypes
 import io.github.catadoxy.disketarr.data.network.BaseUrlNormalizer
+import io.github.catadoxy.disketarr.ui.components.ApiTokenField
 import io.github.catadoxy.disketarr.ui.theme.ThemeCatalog
 import io.github.catadoxy.disketarr.viewmodel.SettingsUiState
 import io.github.catadoxy.disketarr.viewmodel.SettingsViewModel
@@ -177,16 +177,12 @@ fun SettingsScreen(
                                     leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
                                     modifier = Modifier.fillMaxWidth(),
                                 )
-                                OutlinedTextField(
+                                ApiTokenField(
                                     value = apiToken,
                                     onValueChange = {
                                         apiToken = it
                                         viewModel.apiToken = it
                                     },
-                                    label = { Text("API token") },
-                                    singleLine = true,
-                                    visualTransformation = PasswordVisualTransformation(),
-                                    leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) },
                                     modifier = Modifier.fillMaxWidth(),
                                 )
                             }

@@ -29,10 +29,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
+import io.github.catadoxy.disketarr.ui.components.ApiTokenField
 import io.github.catadoxy.disketarr.viewmodel.SetupUiState
 import io.github.catadoxy.disketarr.viewmodel.SetupViewModel
 
@@ -96,16 +96,12 @@ fun SetupScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        OutlinedTextField(
+        ApiTokenField(
             value = apiToken,
             onValueChange = {
                 apiToken = it
                 viewModel.apiToken = it
             },
-            label = { Text("API token") },
-            leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
         )
 
