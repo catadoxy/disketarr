@@ -2,7 +2,8 @@ package io.github.catadoxy.disketarr.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -375,6 +376,11 @@ fun AppRetryableError(
  * The token is masked, and the eye button reveals it only for as long as it is
  * held down - long enough to check what was pasted, without leaving a secret
  * on screen afterwards.
+ *
+ * The eye is a sibling of the text field, drawn over the space reserved for it,
+ * rather than the field's `trailingIcon`. A long press anywhere inside the
+ * field starts a text selection - the field's gesture is on its own container,
+ * so an icon inside it would get "select all" on top of the reveal.
  */
 @Composable
 fun ApiTokenField(
@@ -384,48 +390,56 @@ fun ApiTokenField(
 ) {
     var revealed by remember { mutableStateOf(false) }
 
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text("API token") },
-        singleLine = true,
-        visualTransformation = if (revealed) {
-            VisualTransformation.None
-        } else {
-            PasswordVisualTransformation()
-        },
-        leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) },
-        trailingIcon = {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onPress = {
-                                revealed = true
-                                // Returns false when the finger slides off, so
-                                // the token hides either way.
-                                tryAwaitRelease()
-                                revealed = false
-                            },
-                        )
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = if (revealed) {
-                        Icons.Default.VisibilityOff
-                    } else {
-                        Icons.Default.Visibility
-                    },
-                    contentDescription = if (revealed) {
-                        "Hide the token"
-                    } else {
-                        "Hold to show the token"
-                    },
-                )
-            }
-        },
-        modifier = modifier,
-    )
+    Box(modifier = modifier) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            label = { Text("API token") },
+            singleLine = true,
+            visualTransformation = if (revealed) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation()
+            },
+            leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) },
+            trailingIcon = { Spacer(Modifier.size(40.dp)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 8.dp)
+                .size(40.dp)
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        // Take the whole gesture, so no long press of the field
+                        // underneath can turn into a text selection.
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        down.consume()
+                        revealed = true
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            event.changes.forEach { it.consume() }
+                            if (event.changes.none { it.pressed }) break
+                        }
+                        revealed = false
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = if (revealed) {
+                    Icons.Default.VisibilityOff
+                } else {
+                    Icons.Default.Visibility
+                },
+                contentDescription = if (revealed) {
+                    "Hide the token"
+                } else {
+                    "Hold to show the token"
+                },
+            )
+        }
+    }
 }
