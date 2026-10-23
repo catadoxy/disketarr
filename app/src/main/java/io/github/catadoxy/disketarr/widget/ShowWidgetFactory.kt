@@ -10,6 +10,7 @@ import android.widget.RemoteViewsService
 import io.github.catadoxy.disketarr.R
 import io.github.catadoxy.disketarr.data.SettingsStore
 import io.github.catadoxy.disketarr.data.model.LibraryType
+import io.github.catadoxy.disketarr.data.model.MediaStatus
 import io.github.catadoxy.disketarr.data.model.SearchResult
 import io.github.catadoxy.disketarr.data.network.ApiClient
 import io.github.catadoxy.disketarr.data.network.DisketarrApiService
@@ -74,27 +75,51 @@ class ShowWidgetFactory(
                     // request. Day buckets answer in well under a second.
                     "recent" -> service.listHistory(limit = 30)
                         .asHistoryItems(setOf("tv", "season", "episode"))
-                    "shows" -> service.listTrackedMediaRaw(
-                        mediaType = "tv",
-                        statuses = when (filter) {
+                    "shows" -> {
+                        val statuses = when (filter) {
                             "inprogress" -> listOf("1")
                             "planned" -> listOf("0")
                             "all" -> null
                             else -> listOf("0", "1")
-                        },
-                        limit = 60,
-                    ).extractRowsSafely().toSearchResults()
-                        // The list is the TV library, and Floppy files the anime
-                        // in it when the user sets the anime library to TV - so
-                        // the list is what belongs here, not the item's own
-                        // library field.
-                    else -> service.upcomingCalendar(month = today.monthValue, year = today.year, limit = 20)
-                        .asUpcomingItems()
-                        .filter { item ->
+                        }
+                        // Floppy files the anime in a library of their own, so
+                        // the widget reads both: with the anime in the TV library
+                        // they come back in the TV list, with their own library
+                        // in the Anime one.
+                        listOf(LibraryType.TV, LibraryType.ANIME)
+                            .flatMap { library ->
+                                service.listTrackedMediaRaw(
+                                    mediaType = library,
+                                    statuses = statuses,
+                                    limit = 60,
+                                ).extractRowsSafely().toSearchResults()
+                            }
+                            // The same title can be filed in more than one
+                            // library at once.
+                            .distinctBy { "${it.source}|${it.mediaId}" }
+                            // Caught up, with only unreleased episodes left:
+                            // there is nothing to watch yet.
+                            .filterNot { it.isCaughtUpWithUpcoming() }
+                    }
+                    else -> {
+                        // The calendar answers one month at a time, in air-date
+                        // order, and `limit` counts rows from the start of the
+                        // month - so both the current and the next month are
+                        // read, with a limit that covers a whole month, or the
+                        // week at the end of the month would be cut off.
+                        val months = listOf(today, today.plusMonths(1))
+                        months.flatMap { month ->
+                            service.upcomingCalendar(
+                                month = month.monthValue,
+                                year = month.year,
+                                limit = 200,
+                            ).asUpcomingItems()
+                        }.filter { item ->
                             val air = item.nextEpisode?.airDate?.take(10) ?: return@filter false
                             val date = runCatching { LocalDate.parse(air) }.getOrNull() ?: return@filter false
                             !date.isBefore(today) && !date.isAfter(today.plusDays(7))
                         }
+                    }
                 }
             }
         }.getOrDefault(emptyList())
@@ -347,3 +372,16 @@ private fun formatDate(moment: ZonedDateTime): String =
     } else {
         DATE_WITH_YEAR_FORMAT.format(moment)
     }
+
+/**
+ * True when every aired episode is watched but more are still to come.
+ *
+ * `episodes_left` counts the released episodes and `total_episodes_left` the
+ * announced ones as well, so zero released and a positive total means the user
+ * is caught up with nothing to watch right now. The widget lists what can be
+ * watched, so such a show is left out of it until the next episode is out.
+ */
+internal fun SearchResult.isCaughtUpWithUpcoming(): Boolean =
+    status == MediaStatus.IN_PROGRESS &&
+        episodesLeft != null && episodesLeft <= 0 &&
+        (totalEpisodesLeft ?: 0) > 0
