@@ -36,8 +36,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-class ShowWidgetConfigActivity : ComponentActivity() {
+/** Everything the widget's configuration screen can change. */
+private data class WidgetConfig(
+    val type: String,
+    val sort: String,
+    val filter: String,
+    val source: String,
+    val direction: String,
+    val posterSize: String,
+    val theme: String,
+    val bg: Int,
+    val largeFont: Boolean,
+)
 
+class ShowWidgetConfigActivity : ComponentActivity() {
     private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
 
     /**
@@ -71,22 +83,28 @@ class ShowWidgetConfigActivity : ComponentActivity() {
             MaterialTheme(colorScheme = if (darkTheme) darkColorScheme() else lightColorScheme()) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     ConfigScreen(
-                        initialType = prefs.getString("type_$appWidgetId", "upcoming") ?: "upcoming",
-                        initialSort = prefs.getString("sort_$appWidgetId", "latest") ?: "latest",
-initialFilter = prefs.getString("filter_$appWidgetId", "active") ?: "active",
-initialPosterSize = prefs.getString("postersize_$appWidgetId", "medium") ?: "medium",
-                        initialTheme = prefs.getString("theme_$appWidgetId", "system") ?: "system",
-                        initialBg = prefs.getInt("bg_$appWidgetId", 100),
-                        initialLargeFont = prefs.getBoolean("largefont_$appWidgetId", false),
-                        onSave = { type, sort, filter, posterSize, theme, bg, largeFont ->
+                        initial = WidgetConfig(
+                            type = prefs.getString("type_$appWidgetId", "upcoming") ?: "upcoming",
+                            sort = prefs.getString("sort_$appWidgetId", "latest") ?: "latest",
+                            filter = prefs.getString("filter_$appWidgetId", "active") ?: "active",
+                            source = prefs.getString("source_$appWidgetId", "both") ?: "both",
+                            direction = prefs.getString("direction_$appWidgetId", "desc") ?: "desc",
+                            posterSize = prefs.getString("postersize_$appWidgetId", "medium") ?: "medium",
+                            theme = prefs.getString("theme_$appWidgetId", "system") ?: "system",
+                            bg = prefs.getInt("bg_$appWidgetId", 100),
+                            largeFont = prefs.getBoolean("largefont_$appWidgetId", false),
+                        ),
+                        onSave = { config ->
                             val committed = prefs.edit()
-                                .putString("type_$appWidgetId", type)
-                                .putString("sort_$appWidgetId", sort)
-                                 .putString("filter_$appWidgetId", filter)
-                                  .putString("postersize_$appWidgetId", posterSize)
-                                .putString("theme_$appWidgetId", theme)
-                                .putInt("bg_$appWidgetId", bg)
-                                .putBoolean("largefont_$appWidgetId", largeFont)
+                                .putString("type_$appWidgetId", config.type)
+                                .putString("sort_$appWidgetId", config.sort)
+                                .putString("filter_$appWidgetId", config.filter)
+                                .putString("source_$appWidgetId", config.source)
+                                .putString("direction_$appWidgetId", config.direction)
+                                .putString("postersize_$appWidgetId", config.posterSize)
+                                .putString("theme_$appWidgetId", config.theme)
+                                .putInt("bg_$appWidgetId", config.bg)
+                                .putBoolean("largefont_$appWidgetId", config.largeFont)
                                 .commit()
 
                             android.widget.Toast.makeText(
@@ -126,25 +144,23 @@ initialPosterSize = prefs.getString("postersize_$appWidgetId", "medium") ?: "med
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun ConfigScreen(
-    initialType: String,
-    initialSort: String,
-    initialFilter: String,
-    initialPosterSize: String,
-    initialTheme: String,
-    initialBg: Int,
-    initialLargeFont: Boolean,
-    onSave: (String, String, String, String, String, Int, Boolean) -> Unit,
+    initial: WidgetConfig,
+    onSave: (WidgetConfig) -> Unit,
 ) {
-    var type by remember { mutableStateOf(initialType) }
-    var sort by remember { mutableStateOf(initialSort) }
-    var filter by remember { mutableStateOf(initialFilter) }
-    var posterSize by remember { mutableStateOf(initialPosterSize) }
-    var theme by remember { mutableStateOf(initialTheme) }
-    var bg by remember { mutableStateOf(initialBg) }
-    var largeFont by remember { mutableStateOf(initialLargeFont) }
+    var type by remember { mutableStateOf(initial.type) }
+    var sort by remember { mutableStateOf(initial.sort) }
+    var filter by remember { mutableStateOf(initial.filter) }
+    var source by remember { mutableStateOf(initial.source) }
+    var direction by remember { mutableStateOf(initial.direction) }
+    var posterSize by remember { mutableStateOf(initial.posterSize) }
+    var theme by remember { mutableStateOf(initial.theme) }
+    var bg by remember { mutableStateOf(initial.bg) }
+    var largeFont by remember { mutableStateOf(initial.largeFont) }
     var typeExpanded by remember { mutableStateOf(false) }
     var sortExpanded by remember { mutableStateOf(false) }
     var filterExpanded by remember { mutableStateOf(false) }
+    var sourceExpanded by remember { mutableStateOf(false) }
+    var directionExpanded by remember { mutableStateOf(false) }
     var posterSizeExpanded by remember { mutableStateOf(false) }
     var themeExpanded by remember { mutableStateOf(false) }
     var bgExpanded by remember { mutableStateOf(false) }
@@ -163,6 +179,13 @@ private fun ConfigScreen(
         "planned" to "Planned only",
         "all" to "All (incl. completed)",
     )
+    // Which libraries the Shows list is read from.
+    val sources = listOf(
+        "both" to "Anime + Shows",
+        "tv" to "Shows",
+        "anime" to "Anime",
+    )
+    val directions = listOf("desc" to "Descending", "asc" to "Ascending")
     val posterSizes = listOf("small" to "Small", "medium" to "Medium", "large" to "Large")
     val themes = listOf("system" to "System", "light" to "Light", "dark" to "Dark")
     val backgrounds = listOf(0 to "Transparent", 25 to "25%", 50 to "50%", 75 to "75%", 100 to "Opaque")
@@ -197,6 +220,31 @@ private fun ConfigScreen(
             }
         }
 
+        // The library a show is read from: Floppy files the anime in their own
+        // library, so "Shows" alone would leave them out.
+        if (type == "shows") {
+            ExposedDropdownMenuBox(expanded = sourceExpanded, onExpandedChange = { sourceExpanded = it }) {
+                OutlinedTextField(
+                    value = sources.first { it.first == source }.second,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Source") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sourceExpanded) },
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth(),
+                )
+                DropdownMenu(expanded = sourceExpanded, onDismissRequest = { sourceExpanded = false }) {
+                    sources.forEach { (value, label) ->
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            onClick = { source = value; sourceExpanded = false },
+                        )
+                    }
+                }
+            }
+        }
+
         ExposedDropdownMenuBox(expanded = sortExpanded, onExpandedChange = { sortExpanded = it }) {
             OutlinedTextField(
                 value = sorts.first { it.first == sort }.second,
@@ -213,6 +261,27 @@ private fun ConfigScreen(
                     DropdownMenuItem(
                         text = { Text(label) },
                         onClick = { sort = value; sortExpanded = false },
+                    )
+                }
+            }
+        }
+
+        ExposedDropdownMenuBox(expanded = directionExpanded, onExpandedChange = { directionExpanded = it }) {
+            OutlinedTextField(
+                value = directions.first { it.first == direction }.second,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Direction") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = directionExpanded) },
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth(),
+            )
+            DropdownMenu(expanded = directionExpanded, onDismissRequest = { directionExpanded = false }) {
+                directions.forEach { (value, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = { direction = value; directionExpanded = false },
                     )
                 }
             }
@@ -316,7 +385,24 @@ private fun ConfigScreen(
             )
         }
 
-        Button(onClick = { onSave(type, sort, filter, posterSize, theme, bg, largeFont) }, modifier = Modifier.fillMaxWidth()) {
+        Button(
+            onClick = {
+                onSave(
+                    WidgetConfig(
+                        type = type,
+                        sort = sort,
+                        filter = filter,
+                        source = source,
+                        direction = direction,
+                        posterSize = posterSize,
+                        theme = theme,
+                        bg = bg,
+                        largeFont = largeFont,
+                    ),
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Text("Save")
         }
     }

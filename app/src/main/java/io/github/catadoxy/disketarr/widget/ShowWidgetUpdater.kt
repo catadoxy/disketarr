@@ -21,14 +21,15 @@ object ShowWidgetUpdater {
         val bgColor = (alpha shl 24) or (baseColor and 0x00FFFFFF)
         val titleColor = if (isDark) 0xFFFFFFFF.toInt() else 0xFF111827.toInt()
         val titleSize = if (largeFont) 16f else 14f
+        val source = prefs.getString("source_$appWidgetId", "both") ?: "both"
         val title = when (type) {
             "recent" -> "Disketarr recent"
-            "shows" -> "Disketarr shows"
+            "shows" -> if (source == "anime") "Disketarr anime" else "Disketarr shows"
             else -> "Disketarr upcoming"
         }
         val emptyText = when (type) {
             "recent" -> "No recent activity"
-            "shows" -> "No shows"
+            "shows" -> if (source == "anime") "No anime" else "No shows"
             else -> "No upcoming episodes"
         }
 

@@ -59,12 +59,22 @@ class ShowWidgetFactory(
         val type = prefs.getString("type_$appWidgetId", "upcoming") ?: "upcoming"
         val sort = prefs.getString("sort_$appWidgetId", "latest") ?: "latest"
         val filter = prefs.getString("filter_$appWidgetId", "active") ?: "active"
+        val source = prefs.getString("source_$appWidgetId", "both") ?: "both"
+        val direction = prefs.getString("direction_$appWidgetId", "desc") ?: "desc"
         val posterSize = prefs.getString("postersize_$appWidgetId", "medium") ?: "medium"
 
-        rows.addAll(loadRows(settings, type, sort, filter, posterSize))
+        rows.addAll(loadRows(settings, type, sort, filter, source, direction, posterSize))
     }
 
-    private fun loadRows(settings: SettingsStore, type: String, sort: String, filter: String, posterSize: String): List<Row> {
+    private fun loadRows(
+        settings: SettingsStore,
+        type: String,
+        sort: String,
+        filter: String,
+        source: String,
+        direction: String,
+        posterSize: String,
+    ): List<Row> {
         val today = LocalDate.now()
         val fetched: List<SearchResult> = runCatching {
             runBlocking {
@@ -82,11 +92,15 @@ class ShowWidgetFactory(
                             "all" -> null
                             else -> listOf("0", "1")
                         }
-                        // Floppy files the anime in a library of their own, so
-                        // the widget reads both: with the anime in the TV library
-                        // they come back in the TV list, with their own library
-                        // in the Anime one.
-                        listOf(LibraryType.TV, LibraryType.ANIME)
+                        // The source decides which libraries are read: Floppy
+                        // files the anime in a library of their own, so "Shows"
+                        // alone would leave them out.
+                        val libraries = when (source) {
+                            "tv" -> listOf(LibraryType.TV)
+                            "anime" -> listOf(LibraryType.ANIME)
+                            else -> listOf(LibraryType.TV, LibraryType.ANIME)
+                        }
+                        libraries
                             .flatMap { library ->
                                 service.listTrackedMediaRaw(
                                     mediaType = library,
@@ -128,22 +142,21 @@ class ShowWidgetFactory(
         // no next_episode (and therefore no air date) for library shows.
         val prepared = if (type == "shows") enrichShows(settings, fetched) else fetched
 
-        val sorted = when (sort) {
-            "title" -> prepared.sortedBy { it.title.orEmpty().lowercase() }
+        val order = when (sort) {
+            "title" -> compareBy<SearchResult> { it.title.orEmpty().lowercase() }
             // Shows with a next episode come first; fully watched shows have no
             // episode date and would otherwise outrank in-progress shows with
             // their (older) last-watched timestamps.
-            "oldest" -> prepared.sortedWith(
-                compareBy<SearchResult> { it.nextEpisode == null }
-                    .thenBy { it.episodeOrWatchDate() },
-            )
-            "lastwatched" -> prepared.sortedByDescending { it.lastWatchedAt.orEmpty() }
-            "remaining" -> prepared.sortedByDescending { it.episodesLeft ?: 0 }
-            else -> prepared.sortedWith(
-                compareByDescending<SearchResult> { it.nextEpisode != null }
-                    .thenByDescending { it.episodeOrWatchDate() },
-            )
+            "oldest" -> compareBy<SearchResult> { it.nextEpisode == null }
+                .thenBy { it.episodeOrWatchDate() }
+            "lastwatched" -> compareByDescending<SearchResult> { it.lastWatchedAt.orEmpty() }
+            "remaining" -> compareByDescending<SearchResult> { it.episodesLeft ?: 0 }
+            else -> compareByDescending<SearchResult> { it.nextEpisode != null }
+                .thenByDescending { it.episodeOrWatchDate() }
         }
+        // "Descending" keeps each sort's usual order (newest first, most
+        // episodes left first, A-Z for titles); "Ascending" reverses it.
+        val sorted = prepared.sortedWith(if (direction == "asc") order.reversed() else order)
 
         return sorted.take(MAX_ROWS).map { item -> Row(item, WidgetImages.load(item.image)) }
     }
