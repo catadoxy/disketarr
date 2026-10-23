@@ -41,8 +41,8 @@ android {
         applicationId = "io.github.catadoxy.disketarr"
         minSdk = 26
         targetSdk = 35
-        versionCode = 31
-        versionName = "0.4.12"
+        versionCode = 32
+        versionName = "0.4.13"
     }
 
     buildTypes {

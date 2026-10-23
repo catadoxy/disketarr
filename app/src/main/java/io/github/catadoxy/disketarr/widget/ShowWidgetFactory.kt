@@ -9,11 +9,15 @@ import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import io.github.catadoxy.disketarr.R
 import io.github.catadoxy.disketarr.data.SettingsStore
+import io.github.catadoxy.disketarr.data.model.FlexStringAdapterFactory
 import io.github.catadoxy.disketarr.data.model.LibraryType
 import io.github.catadoxy.disketarr.data.model.MediaStatus
 import io.github.catadoxy.disketarr.data.model.SearchResult
 import io.github.catadoxy.disketarr.data.network.ApiClient
 import io.github.catadoxy.disketarr.data.network.DisketarrApiService
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import io.github.catadoxy.disketarr.viewmodel.asHistoryItems
 import io.github.catadoxy.disketarr.viewmodel.asSeasonEpisodes
 import io.github.catadoxy.disketarr.viewmodel.asSeasonSummaries
@@ -41,7 +45,16 @@ class ShowWidgetFactory(
     private class Row(val item: SearchResult, val poster: Bitmap?)
 
     private val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
-    private val rows = mutableListOf<Row>()
+
+    /**
+     * The rows on screen.
+     *
+     * Replaced in one go rather than edited in place: the launcher reads them
+     * from another thread while a refresh is running, and a half-cleared list
+     * would come back as "no shows".
+     */
+    @Volatile
+    private var rows: List<Row> = emptyList()
 
     override fun onCreate() = Unit
 
@@ -49,13 +62,12 @@ class ShowWidgetFactory(
      * Fetches the rows and downloads their posters. `RemoteViewsFactory` has no
      * way to signal "data ready" later, so this blocks (as it did before); poster
      * downloads are memory-cached and time-limited to keep it short.
+     *
+     * A refresh that cannot reach Floppy keeps the last list that did load, so
+     * the widget never blanks out because of one failed update.
      */
     override fun onDataSetChanged() {
-        rows.clear()
-        val settings = SettingsStore(context)
-        if (!settings.isConfigured) return
-
-        val prefs = context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
         val type = prefs.getString("type_$appWidgetId", "upcoming") ?: "upcoming"
         val sort = prefs.getString("sort_$appWidgetId", "latest") ?: "latest"
         val filter = prefs.getString("filter_$appWidgetId", "active") ?: "active"
@@ -63,23 +75,47 @@ class ShowWidgetFactory(
         val direction = prefs.getString("direction_$appWidgetId", "desc") ?: "desc"
         val posterSize = prefs.getString("postersize_$appWidgetId", "medium") ?: "medium"
 
-        rows.addAll(loadRows(settings, type, sort, filter, source, direction, posterSize))
+        val items = runCatching {
+            val settings = SettingsStore(context)
+            if (!settings.isConfigured) {
+                rows = emptyList()
+                return
+            }
+            loadItems(settings, type, sort, filter, source, direction)
+        }.getOrNull()
+
+        if (items != null) {
+            rows = toRows(items)
+            if (items.isNotEmpty()) saveCache(prefs, type, items)
+        } else {
+            // The server was unreachable (or the settings could not be opened):
+            // show the last list that loaded instead of nothing.
+            val cached = cachedItems(prefs, type)
+            android.util.Log.w("ShowWidget", "Floppy unreachable; showing ${cached.size} cached rows")
+            rows = toRows(sortItems(cached, sort, direction))
+        }
     }
 
-    private fun loadRows(
+    private fun toRows(items: List<SearchResult>): List<Row> = runBlocking {
+        // One request per poster, in parallel: done one after another a slow
+        // connection can outlast the launcher's patience and blank the widget.
+        items.map { item ->
+            async(Dispatchers.IO) { Row(item, WidgetImages.load(item.image)) }
+        }.awaitAll()
+    }
+
+    private fun loadItems(
         settings: SettingsStore,
         type: String,
         sort: String,
         filter: String,
         source: String,
         direction: String,
-        posterSize: String,
-    ): List<Row> {
+    ): List<SearchResult> {
         val today = LocalDate.now()
-        val fetched: List<SearchResult> = runCatching {
-            runBlocking {
-                val service = ApiClient.getService(settings)
-                when (type) {
+        val fetched: List<SearchResult> = runBlocking {
+            val service = ApiClient.getService(settings)
+            when (type) {
                     // The flat list costs the server ~10s to aggregate (history is
                     // thousands of entries); the widget's update window aborts that
                     // request. Day buckets answer in well under a second.
@@ -135,13 +171,20 @@ class ShowWidgetFactory(
                         }
                     }
                 }
-            }
-        }.getOrDefault(emptyList())
+        }
 
         // Shows need the season data before sorting: the list endpoint returns
         // no next_episode (and therefore no air date) for library shows.
         val prepared = if (type == "shows") enrichShows(settings, fetched) else fetched
 
+        return sortItems(prepared, sort, direction).take(MAX_ROWS)
+    }
+
+    private fun sortItems(
+        items: List<SearchResult>,
+        sort: String,
+        direction: String,
+    ): List<SearchResult> {
         val order = when (sort) {
             "title" -> compareBy<SearchResult> { it.title.orEmpty().lowercase() }
             // Shows with a next episode come first; fully watched shows have no
@@ -156,9 +199,7 @@ class ShowWidgetFactory(
         }
         // "Descending" keeps each sort's usual order (newest first, most
         // episodes left first, A-Z for titles); "Ascending" reverses it.
-        val sorted = prepared.sortedWith(if (direction == "asc") order.reversed() else order)
-
-        return sorted.take(MAX_ROWS).map { item -> Row(item, WidgetImages.load(item.image)) }
+        return items.sortedWith(if (direction == "asc") order.reversed() else order)
     }
 
     /**
@@ -214,9 +255,11 @@ class ShowWidgetFactory(
     override fun getCount(): Int = rows.size
 
     override fun getViewAt(position: Int): RemoteViews {
-        val row = rows[position]
+        // The row can be gone if a refresh replaced the list between getCount
+        // and this call; show an empty row rather than crash.
+        val row = rows.getOrNull(position) ?: return RemoteViews(context.packageName, R.layout.widget_list_item_small)
         val item = row.item
-        val prefs = context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
         val type = prefs.getString("type_$appWidgetId", "upcoming") ?: "upcoming"
         val largeFont = prefs.getBoolean("largefont_$appWidgetId", false)
         val posterSize = prefs.getString("postersize_$appWidgetId", "medium") ?: "medium"
@@ -312,10 +355,34 @@ class ShowWidgetFactory(
     override fun hasStableIds(): Boolean = false
 
     override fun onDestroy() {
-        rows.clear()
+        rows = emptyList()
+    }
+
+    /**
+     * The last list that loaded, kept in plain preferences.
+     *
+     * Plain on purpose: it has to be readable when the encrypted settings
+     * cannot be opened (right after boot, say), which is one of the moments the
+     * widget would otherwise come up empty.
+     */
+    private fun cachedItems(prefs: android.content.SharedPreferences, type: String): List<SearchResult> {
+        val raw = prefs.getString("cache_${type}_$appWidgetId", null) ?: return emptyList()
+        return runCatching { itemsAdapter.fromJson(raw) }.getOrNull().orEmpty()
+    }
+
+    private fun saveCache(
+        prefs: android.content.SharedPreferences,
+        type: String,
+        items: List<SearchResult>,
+    ) {
+        runCatching {
+            prefs.edit().putString("cache_${type}_$appWidgetId", itemsAdapter.toJson(items)).apply()
+        }
     }
 
     private companion object {
+        const val WIDGET_PREFS = "widget_prefs"
+
         /**
          * How many shows the widget loads.
          *
@@ -324,6 +391,17 @@ class ShowWidgetFactory(
          * through the same list, so the widget shows the same shows.
          */
         const val MAX_ROWS = 20
+
+        /** Round-trips the rows through the cache. */
+        private val moshi: Moshi = Moshi.Builder()
+            .add(FlexStringAdapterFactory)
+            .add(KotlinJsonAdapterFactory())
+            .build()
+
+        private val itemsAdapter = moshi.adapter<List<SearchResult>>(
+            Types.newParameterizedType(List::class.java, SearchResult::class.java),
+        )
+
         const val LIGHT_ROW = 0xFFF3F4F6.toInt()
         const val DARK_ROW = 0xFF374151.toInt()
         const val LIGHT_PRIMARY = 0xFF111827.toInt()
