@@ -182,10 +182,6 @@ class DetailsViewModel @Inject constructor(
     private val watchedEpisodeKeys: MutableSet<String> =
         settingsStore.watchedEpisodeKeys().toMutableSet()
 
-    /** Total episodes of this show (from Floppy's max_progress). Only used for
-     *  the debug dump below - the watched state comes from Floppy itself. */
-    private var showMaxProgress: Int = 0
-
     /**
      * The Floppy library this screen is showing.
      *
@@ -278,9 +274,6 @@ class DetailsViewModel @Inject constructor(
                     // screen was opened for, so everything from here on works
                     // with the library Floppy actually has it in.
                     this@DetailsViewModel.library = resolvedLibrary
-                    showMaxProgress = detail.maxProgress ?: 0
-                    try { java.io.File("/sdcard/showMaxProgress.txt").writeText("showMaxProgress=$showMaxProgress mediaId=$mediaId") } catch (e: Exception) {}
-                    
 
                     // A show's detail payload only carries an aggregate season
                     // count, so the real seasons and episodes come from their own
