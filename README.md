@@ -148,7 +148,8 @@ without them the app can never be updated in place again.
 
 ## Notes
 
-- Cleartext HTTP is enabled for self-hosted instances without TLS (see `network_security_config.xml`).- Base URLs without a scheme default to `http://` for LAN/loopback addresses and `https://` otherwise.
+- Cleartext HTTP is enabled for self-hosted instances without TLS (see `network_security_config.xml`).
+- Base URLs without a scheme default to `http://` for LAN/loopback addresses and `https://` otherwise.
 - If an external auth layer (Authelia/SSO) fronts Floppy, ensure `/api/v1/*` is reachable by mobile clients.
 - Settings includes saved server profiles, category filters, reminder lead time, and a permissions/diagnostics probe.
 - Floppy files a tracked title in one *library* (`tv`, `anime`, `movie` or `season`), and the same title can be in more than one of them. The app addresses a title by its library, so a title tracked in the TV library shows up in the Shows tab and the same title in the Anime library in the Anime tab. Which library the anime belong to is Floppy's `anime_library_mode` setting, and the app follows it.
