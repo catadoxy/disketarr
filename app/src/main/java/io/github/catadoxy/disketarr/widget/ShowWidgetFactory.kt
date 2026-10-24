@@ -15,6 +15,7 @@ import io.github.catadoxy.disketarr.data.model.MediaStatus
 import io.github.catadoxy.disketarr.data.model.SearchResult
 import io.github.catadoxy.disketarr.data.network.ApiClient
 import io.github.catadoxy.disketarr.data.network.DisketarrApiService
+import io.github.catadoxy.disketarr.viewmodel.AnimeLibraryMode
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -128,12 +129,15 @@ class ShowWidgetFactory(
                             "all" -> null
                             else -> listOf("0", "1")
                         }
-                        // The source decides which libraries are read: Floppy
-                        // files the anime in a library of their own, so "Shows"
-                        // alone would leave them out.
-                        val libraries = when (source) {
-                            "tv" -> listOf(LibraryType.TV)
-                            "anime" -> listOf(LibraryType.ANIME)
+                        // Floppy decides whether the anime have a library of
+                        // their own. When they are filed in the TV library
+                        // there is no Anime list to read, so only the TV one is
+                        // used - the same rule the app's tabs follow.
+                        val mode = AnimeLibraryMode.read(service) ?: settings.animeLibraryMode
+                        val libraries = when {
+                            !AnimeLibraryMode.hasAnimeLibrary(mode) -> listOf(LibraryType.TV)
+                            source == "tv" -> listOf(LibraryType.TV)
+                            source == "anime" -> listOf(LibraryType.ANIME)
                             else -> listOf(LibraryType.TV, LibraryType.ANIME)
                         }
                         libraries

@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.widget.RemoteViews
 import io.github.catadoxy.disketarr.R
+import io.github.catadoxy.disketarr.data.SettingsStore
+import io.github.catadoxy.disketarr.viewmodel.AnimeLibraryMode
 
 object ShowWidgetUpdater {
     fun update(context: Context, appWidgetId: Int, feedback: String? = null) {
@@ -22,14 +24,20 @@ object ShowWidgetUpdater {
         val titleColor = if (isDark) 0xFFFFFFFF.toInt() else 0xFF111827.toInt()
         val titleSize = if (largeFont) 16f else 14f
         val source = prefs.getString("source_$appWidgetId", "both") ?: "both"
+        // With the anime filed in the TV library there is no Anime library to
+        // read, so the widget is a Shows widget whatever the stored source says.
+        val animeLibraryExists = runCatching {
+            AnimeLibraryMode.hasAnimeLibrary(SettingsStore(context).animeLibraryMode)
+        }.getOrDefault(true)
+        val effectiveSource = if (animeLibraryExists) source else "tv"
         val title = when (type) {
             "recent" -> "Disketarr recent"
-            "shows" -> if (source == "anime") "Disketarr anime" else "Disketarr shows"
+            "shows" -> if (effectiveSource == "anime") "Disketarr anime" else "Disketarr shows"
             else -> "Disketarr upcoming"
         }
         val emptyText = when (type) {
             "recent" -> "No recent activity"
-            "shows" -> if (source == "anime") "No anime" else "No shows"
+            "shows" -> if (effectiveSource == "anime") "No anime" else "No shows"
             else -> "No upcoming episodes"
         }
 

@@ -11,9 +11,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -35,6 +39,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
+import io.github.catadoxy.disketarr.data.SettingsStore
+import io.github.catadoxy.disketarr.data.network.ApiClient
+import io.github.catadoxy.disketarr.viewmodel.AnimeLibraryMode
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Everything the widget's configuration screen can change. */
 private data class WidgetConfig(
@@ -51,6 +62,9 @@ private data class WidgetConfig(
 
 class ShowWidgetConfigActivity : ComponentActivity() {
     private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
+
+    /** Whether Floppy files the anime in a library of their own. */
+    private var animeLibraryAvailable by mutableStateOf(true)
 
     /**
      * True when the launcher started this screen to place a widget.
@@ -75,6 +89,20 @@ class ShowWidgetConfigActivity : ComponentActivity() {
 
         setResult(Activity.RESULT_CANCELED, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
 
+        val store = SettingsStore(this)
+        // Whether Floppy has an Anime library at all. The stored answer is used
+        // until the server has been asked.
+        animeLibraryAvailable = AnimeLibraryMode.hasAnimeLibrary(store.animeLibraryMode)
+        lifecycleScope.launch {
+            val mode = runCatching {
+                withContext(Dispatchers.IO) {
+                    AnimeLibraryMode.read(ApiClient.getService(store))
+                }
+            }.getOrNull() ?: return@launch
+            store.animeLibraryMode = mode
+            animeLibraryAvailable = AnimeLibraryMode.hasAnimeLibrary(mode)
+        }
+
         val prefs = getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
         setContent {
             // Follow the phone's light/dark setting; the widget's own theme
@@ -94,6 +122,7 @@ class ShowWidgetConfigActivity : ComponentActivity() {
                             bg = prefs.getInt("bg_$appWidgetId", 100),
                             largeFont = prefs.getBoolean("largefont_$appWidgetId", false),
                         ),
+                        animeLibraryAvailable = animeLibraryAvailable,
                         onSave = { config ->
                             val committed = prefs.edit()
                                 .putString("type_$appWidgetId", config.type)
@@ -145,6 +174,7 @@ class ShowWidgetConfigActivity : ComponentActivity() {
 @Composable
 private fun ConfigScreen(
     initial: WidgetConfig,
+    animeLibraryAvailable: Boolean,
     onSave: (WidgetConfig) -> Unit,
 ) {
     var type by remember { mutableStateOf(initial.type) }
@@ -193,6 +223,10 @@ private fun ConfigScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // Android 15 draws behind the system bars, so the scroll area is
+            // kept inside them - otherwise the Save button sits under the home
+            // button and cannot be reached.
+            .windowInsetsPadding(WindowInsets.systemBars)
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -221,8 +255,10 @@ private fun ConfigScreen(
         }
 
         // The library a show is read from: Floppy files the anime in their own
-        // library, so "Shows" alone would leave them out.
-        if (type == "shows") {
+        // library, so "Shows" alone would leave them out. With the anime in the
+        // TV library there is no Anime library at all, so there is nothing to
+        // choose - the same rule the app's tabs follow.
+        if (type == "shows" && animeLibraryAvailable) {
             ExposedDropdownMenuBox(expanded = sourceExpanded, onExpandedChange = { sourceExpanded = it }) {
                 OutlinedTextField(
                     value = sources.first { it.first == source }.second,
