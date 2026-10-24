@@ -148,10 +148,23 @@ without them the app can never be updated in place again.
 
 ## Notes
 
-- Cleartext HTTP is enabled for self-hosted instances without TLS (see `network_security_config.xml`).
-- Base URLs without a scheme default to `http://` for LAN/loopback addresses and `https://` otherwise.
+- Cleartext HTTP is enabled for self-hosted instances without TLS (see `network_security_config.xml`).- Base URLs without a scheme default to `http://` for LAN/loopback addresses and `https://` otherwise.
 - If an external auth layer (Authelia/SSO) fronts Floppy, ensure `/api/v1/*` is reachable by mobile clients.
 - Settings includes saved server profiles, category filters, reminder lead time, and a permissions/diagnostics probe.
 - Floppy files a tracked title in one *library* (`tv`, `anime`, `movie` or `season`), and the same title can be in more than one of them. The app addresses a title by its library, so a title tracked in the TV library shows up in the Shows tab and the same title in the Anime library in the Anime tab. Which library the anime belong to is Floppy's `anime_library_mode` setting, and the app follows it.
 - The app asks Floppy for a library rather than filtering the answer: `media_type=tv` is the TV library, `media_type=anime` the Anime one. The anime move between the two when the mode changes, and a title's own library field does not follow, so the list - not the field - is what says where a title belongs. The cached pages are keyed by the mode and dropped when it changes.
 - The widget's *Shows* list reads the TV library, the Anime library or both - the **Source** setting, offered only when Floppy has an Anime library of its own. Its sort can run in either direction. A show whose aired episodes are all watched is left out while more are still to come. A refresh that cannot reach Floppy keeps the last list that loaded, so the widget does not blank out. Marking an episode watched from the widget writes into the library the row came from.
+
+## Disclaimer
+
+This is an unofficial, community-built client. It is not affiliated with,
+endorsed by, or supported by the Floppy project or its maintainers. Floppy
+itself is a separate, self-hosted application - please report problems with the
+server there, and problems with this app here.
+
+## License
+
+[GPL-3.0](LICENSE). The app is free software: you can redistribute it and/or
+modify it under the terms of the GNU General Public License as published by the
+Free Software Foundation, either version 3 of the License, or (at your option)
+any later version.
