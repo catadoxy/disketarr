@@ -1,6 +1,6 @@
 # Disketarr
 
-Native Android client for the self-hosted **Floppy** media tracker.  
+An **unofficial, personal** Android client for the self-hosted **Floppy** media tracker.  
 Built with Kotlin and Jetpack Compose against the Floppy REST API.
 
 ## Features
@@ -157,10 +157,15 @@ without them the app can never be updated in place again.
 
 ## Disclaimer
 
-This is an unofficial, community-built client. It is not affiliated with,
-endorsed by, or supported by the Floppy project or its maintainers. Floppy
-itself is a separate, self-hosted application - please report problems with the
-server there, and problems with this app here.
+This is a **personal project**, written for my own use and shared as-is. It is
+**not affiliated with, endorsed by, sponsored by, or supported by the Floppy
+project or its maintainers in any way**, and it is not an official Floppy
+client. Any issues with this app belong here; issues with Floppy itself belong
+to the Floppy project.
+
+Floppy is a separate, self-hosted application. "Floppy" and any related names
+or marks belong to their respective owners and are used here only to describe
+what this app connects to.
 
 ## License
 
