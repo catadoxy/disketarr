@@ -216,6 +216,22 @@ fun SettingsScreen(
                     Text(if (uiState is SettingsUiState.DiagnosticsLoading) "Loading..." else "Permissions & Diagnostics")
                 }
 
+                // The report belongs to the button that produced it, not to the
+                // bottom of the page.
+                (uiState as? SettingsUiState.Diagnostics)?.let { diagnostics ->
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                    ) {
+                        Text(
+                            text = diagnostics.output,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(12.dp),
+                        )
+                    }
+                }
+
             }
         }
 
@@ -572,19 +588,6 @@ fun SettingsScreen(
                     Text(
                         text = state.message,
                         color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(12.dp),
-                    )
-                }
-            }
-            is SettingsUiState.Diagnostics -> {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                ) {
-                    Text(
-                        text = state.output,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(12.dp),
                     )
                 }
