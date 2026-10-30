@@ -6,4 +6,5 @@
     android:initialLayout="@layout/widget_show_list"
     android:configure="io.github.catadoxy.disketarr.widget.ShowWidgetConfigActivity"
     android:resizeMode="horizontal|vertical"
-    android:widgetCategory="home_screen" />
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable" />

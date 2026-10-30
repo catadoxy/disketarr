@@ -4,6 +4,7 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.os.Build
 import android.widget.RemoteViews
 import io.github.catadoxy.disketarr.R
 import io.github.catadoxy.disketarr.data.SettingsStore
@@ -22,7 +23,7 @@ object ShowWidgetUpdater {
         val alpha = (bgOpacity.coerceIn(0, 100) * 255 / 100)
         val bgColor = (alpha shl 24) or (baseColor and 0x00FFFFFF)
         val titleColor = if (isDark) 0xFFFFFFFF.toInt() else 0xFF111827.toInt()
-        val titleSize = if (largeFont) 16f else 14f
+        val titleSize = if (largeFont) 18f else 16f
         val source = prefs.getString("source_$appWidgetId", "both") ?: "both"
         // With the anime filed in the TV library there is no Anime library to
         // read, so the widget is a Shows widget whatever the stored source says.
@@ -70,21 +71,25 @@ object ShowWidgetUpdater {
         )
         views.setPendingIntentTemplate(R.id.widget_list, pending)
 
-        // Lets the widget be reconfigured after it has already been placed. The
-        // launcher does not always offer a settings entry on long-press, so the
-        // header carries its own settings button.
-        val configureIntent = Intent(context, ShowWidgetConfigActivity::class.java).apply {
-            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // Android 9+ reaches this screen by long-pressing the widget
+        // (android:widgetFeatures="reconfigurable"), so the header button is
+        // only needed - and only shown - on the older launchers that have no
+        // reconfigure entry of their own.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            val configureIntent = Intent(context, ShowWidgetConfigActivity::class.java).apply {
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val configurePending = android.app.PendingIntent.getActivity(
+                context,
+                appWidgetId,
+                configureIntent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
+            )
+            views.setOnClickPendingIntent(R.id.widget_configure, configurePending)
+            views.setInt(R.id.widget_configure, "setColorFilter", titleColor)
+            views.setViewVisibility(R.id.widget_configure, android.view.View.VISIBLE)
         }
-        val configurePending = android.app.PendingIntent.getActivity(
-            context,
-            appWidgetId,
-            configureIntent,
-            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
-        )
-        views.setOnClickPendingIntent(R.id.widget_configure, configurePending)
-        views.setInt(R.id.widget_configure, "setColorFilter", titleColor)
 
         manager.updateAppWidget(appWidgetId, views)
         manager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.widget_list)

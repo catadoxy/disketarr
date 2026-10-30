@@ -21,18 +21,23 @@
             android:layout_weight="1"
             android:text="Disketarr upcoming"
             android:textStyle="bold"
-            android:textSize="14sp"
+            android:textSize="16sp"
             android:textColor="#111827"
             android:maxLines="1"
             android:ellipsize="end" />
 
+        <!-- Long-pressing the widget in the launcher is the settings entry on
+             Android 9+ (android:widgetFeatures="reconfigurable"). Older
+             launchers have no such entry, so the button stays for them and is
+             hidden everywhere else. -->
         <ImageView
             android:id="@+id/widget_configure"
             android:layout_width="28dp"
             android:layout_height="28dp"
             android:padding="4dp"
             android:src="@android:drawable/ic_menu_preferences"
-            android:contentDescription="Widget settings" />
+            android:contentDescription="Widget settings"
+            android:visibility="gone" />
     </LinearLayout>
 
     <ListView
