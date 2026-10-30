@@ -55,9 +55,11 @@ import io.github.catadoxy.disketarr.ui.components.AppEmptyState
 import io.github.catadoxy.disketarr.ui.components.AppRetryableError
 import io.github.catadoxy.disketarr.ui.components.AppScreenHeader
 import io.github.catadoxy.disketarr.ui.components.MediaRow
+import io.github.catadoxy.disketarr.ui.components.SwipeableTabPager
 import io.github.catadoxy.disketarr.ui.components.UnderlineTabRow
 import io.github.catadoxy.disketarr.viewmodel.BrowseFilter
 import io.github.catadoxy.disketarr.viewmodel.BrowseTab
+import io.github.catadoxy.disketarr.viewmodel.BrowseUiState
 import io.github.catadoxy.disketarr.viewmodel.BrowseViewModel
 import io.github.catadoxy.disketarr.viewmodel.FILTERABLE_TABS
 
@@ -116,44 +118,78 @@ fun BrowseScreen(
             onRefresh = { viewModel.forceRefresh() },
             modifier = Modifier.fillMaxSize(),
         ) {
-        when {
-            uiState.loading && uiState.items.orEmpty().isEmpty() && uiState.rails.orEmpty().isEmpty() ->
-                RefreshableEmpty("Loading…")
-
-            uiState.error != null && uiState.items.orEmpty().isEmpty() && uiState.rails.orEmpty().isEmpty() ->
-                RefreshableError(uiState.error.orEmpty()) { viewModel.forceRefresh() }
-
-            uiState.tab == BrowseTab.DISCOVER -> DiscoverRails(uiState.rails, onOpenDetail, viewModel.mediaType)
-
-            uiState.items.isEmpty() ->
-                RefreshableEmpty(emptyMessage(uiState.tab))
-
-            else -> LazyColumn(
+            SwipeableTabPager(
+                pageCount = viewModel.tabs.size,
+                selectedIndex = viewModel.tabs.indexOf(uiState.tab).coerceAtLeast(0),
+                onPageSelected = { page -> viewModel.selectTab(viewModel.tabs[page]) },
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 32.dp),
-            ) {
-                // History is one row per play, so the same show can appear many
-                // times. Keying by source/type/id alone collides and crashes the
-                // list, so include the position.
-                itemsIndexed(uiState.items) { _, item ->
-                    MediaRow(item = item, onClick = { onOpenDetail(item, item.libraryMediaType ?: viewModel.mediaType) })
-                }
-                if (uiState.canLoadMore) {
-                    item {
-                        Button(
-                            onClick = viewModel::loadMore,
-                            enabled = !uiState.loading,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                        ) {
-                            Text(if (uiState.loading) "Loading…" else "See more")
-                        }
+            ) { page ->
+                val tab = viewModel.tabs[page]
+                BrowsePage(
+                    tab = tab,
+                    // A page that is not the selected tab has not been loaded
+                    // yet - it shows a loading placeholder until the swipe
+                    // settles and the view model fetches it.
+                    state = if (tab == uiState.tab) uiState else null,
+                    mediaType = viewModel.mediaType,
+                    onOpenDetail = onOpenDetail,
+                    onRetry = viewModel::forceRefresh,
+                    onLoadMore = viewModel::loadMore,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrowsePage(
+    tab: BrowseTab,
+    state: BrowseUiState?,
+    mediaType: String,
+    onOpenDetail: (SearchResult, String) -> Unit,
+    onRetry: () -> Unit,
+    onLoadMore: () -> Unit,
+) {
+    if (state == null ||
+        (state.loading && state.items.orEmpty().isEmpty() && state.rails.orEmpty().isEmpty())
+    ) {
+        RefreshableEmpty("Loading…")
+        return
+    }
+
+    when {
+        state.error != null && state.items.orEmpty().isEmpty() && state.rails.orEmpty().isEmpty() ->
+            RefreshableError(state.error.orEmpty()) { onRetry() }
+
+        tab == BrowseTab.DISCOVER -> DiscoverRails(state.rails, onOpenDetail, mediaType)
+
+        state.items.isEmpty() ->
+            RefreshableEmpty(emptyMessage(tab))
+
+        else -> LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 32.dp),
+        ) {
+            // History is one row per play, so the same show can appear many
+            // times. Keying by source/type/id alone collides and crashes the
+            // list, so include the position.
+            itemsIndexed(state.items) { _, item ->
+                MediaRow(item = item, onClick = { onOpenDetail(item, item.libraryMediaType ?: mediaType) })
+            }
+            if (state.canLoadMore) {
+                item {
+                    Button(
+                        onClick = onLoadMore,
+                        enabled = !state.loading,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                    ) {
+                        Text(if (state.loading) "Loading…" else "See more")
                     }
                 }
             }
         }
-    }
     }
 }
 

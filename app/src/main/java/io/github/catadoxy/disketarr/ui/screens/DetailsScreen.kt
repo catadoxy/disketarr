@@ -49,6 +49,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.graphics.Brush
 import io.github.catadoxy.disketarr.data.model.SeasonSummary
 import io.github.catadoxy.disketarr.ui.components.AppScreenHeader
+import io.github.catadoxy.disketarr.ui.components.SwipeableTabPager
 import io.github.catadoxy.disketarr.ui.components.UnderlineTabRow
 import io.github.catadoxy.disketarr.ui.components.mediaTypeLabel
 import io.github.catadoxy.disketarr.viewmodel.isShowMediaType
@@ -207,62 +208,68 @@ fun DetailsScreen(
                 Column(
                     modifier = Modifier.fillMaxSize(),
                 ) {
-
-                PullToRefreshBox(
-                    isRefreshing = false,
-                    onRefresh = { viewModel.reload(source, mediaType, mediaId) },
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(vertical = 20.dp),
-                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                    PullToRefreshBox(
+                        isRefreshing = false,
+                        onRefresh = { viewModel.reload(source, mediaType, mediaId) },
+                        modifier = Modifier.fillMaxSize(),
                     ) {
-                        when (activeTab) {
-                            "Overview" -> {
-                                OverviewTab(
-                                    detail = detail,
-                                    nextEpisode = nextEpisode,
-                                    remaining = state.seasons
-                                        .firstOrNull { it.seasonNumber == state.selectedSeason }
-                                        ?.episodesLeft,
-                                    actionMessage = lastActionMessage,
-                                    onSetWatched = {
-                                        viewModel.markNextEpisodeWatched(mediaType, source, mediaId)
-                                    },
-                                )
-                                // Everything this screen used to show stays here.
-                                DetailsTab(
-                                    detail = detail,
-                                    viewModel = viewModel,
-                                    actionMessage = lastActionMessage,
-                                )
-                            }
+                        SwipeableTabPager(
+                            pageCount = tabs.size,
+                            selectedIndex = tabs.indexOf(activeTab).coerceAtLeast(0),
+                            onPageSelected = { selectedTab = it },
+                            modifier = Modifier.fillMaxSize(),
+                        ) { page ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(vertical = 20.dp),
+                                verticalArrangement = Arrangement.spacedBy(20.dp),
+                            ) {
+                                when (tabs[page]) {
+                                    "Overview" -> {
+                                        OverviewTab(
+                                            detail = detail,
+                                            nextEpisode = nextEpisode,
+                                            remaining = state.seasons
+                                                .firstOrNull { it.seasonNumber == state.selectedSeason }
+                                                ?.episodesLeft,
+                                            actionMessage = lastActionMessage,
+                                            onSetWatched = {
+                                                viewModel.markNextEpisodeWatched(mediaType, source, mediaId)
+                                            },
+                                        )
+                                        // Everything this screen used to show stays here.
+                                        DetailsTab(
+                                            detail = detail,
+                                            viewModel = viewModel,
+                                            actionMessage = lastActionMessage,
+                                        )
+                                    }
 
-                            else -> state.seasons.forEach { summary ->
-                                SeasonSection(
-                                    summary = summary,
-                                    selectedSeason = state.selectedSeason,
-                                    episodes = if (summary.seasonNumber == state.selectedSeason) {
-                                        state.episodes
-                                    } else {
-                                        emptyList()
-                                    },
-                                    loading = state.loadingEpisodes && summary.seasonNumber == state.selectedSeason,
-                                    onSelect = {
-                                        viewModel.toggleSeason(mediaType, source, mediaId, summary.seasonNumber)
-                                    },
-                                    onToggleEpisode = { episode ->
-                                        viewModel.toggleEpisodeWatched(mediaType, source, mediaId, episode)
-                                    },
-                                )
+                                    else -> state.seasons.forEach { summary ->
+                                        SeasonSection(
+                                            summary = summary,
+                                            selectedSeason = state.selectedSeason,
+                                            episodes = if (summary.seasonNumber == state.selectedSeason) {
+                                                state.episodes
+                                            } else {
+                                                emptyList()
+                                            },
+                                            loading = state.loadingEpisodes && summary.seasonNumber == state.selectedSeason,
+                                            onSelect = {
+                                                viewModel.toggleSeason(mediaType, source, mediaId, summary.seasonNumber)
+                                            },
+                                            onToggleEpisode = { episode ->
+                                                viewModel.toggleEpisodeWatched(mediaType, source, mediaId, episode)
+                                            },
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
-            }
         }
     }
     }

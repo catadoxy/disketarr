@@ -44,7 +44,9 @@ class StatisticsViewModel @Inject constructor(
         if (!force) {
             appCache.statistics()?.let { cached ->
                 _uiState.value = StatisticsUiState(overview = cached.value, loading = false)
-                if (appCache.isFresh(cached.at)) return
+                // An empty parse is never worth keeping: it usually means the
+                // cached JSON predates the current model.
+                if (appCache.isFresh(cached.at) && !cached.value.isEmpty) return
             }
         }
 

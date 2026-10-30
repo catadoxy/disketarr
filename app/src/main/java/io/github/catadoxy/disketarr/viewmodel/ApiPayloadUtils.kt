@@ -200,99 +200,249 @@ internal fun Any?.asSeasonEpisodes(fallbackSeason: Int? = null): List<SeasonEpis
         .sortedBy { it.episodeNumber }
 
 /**
- * Trims Disketarr's statistics payload down to the summary the Statistics tab shows.
- * Everything is read defensively: the endpoint is large and its chart sections
- * change shape between releases, so a missing or unexpected section degrades to
- * "not shown" rather than failing the screen.
+ * Trims Floppy's statistics payload down to what the Statistics screen shows.
+ *
+ * Everything is read defensively: the endpoint is large (roughly two megabytes)
+ * and its chart sections change shape between Floppy releases, so a missing or
+ * unexpected section degrades to "not shown" rather than failing the screen.
  */
 internal fun Any?.asStatisticsOverview(): StatisticsOverview {
     val root = this.toStringKeyMapOrNull() ?: return StatisticsOverview()
     val stats = root["statistics"].toStringKeyMapOrNull() ?: return StatisticsOverview()
 
-    val mediaCount = stats["media_count"].toStringKeyMapOrNull()
-    val labels = LibraryMediaTypes.options.toMap()
+    val rangeName = root["range"].toStringKeyMapOrNull()
+        ?.get("range_name")?.toString()?.takeIf { it.isNotBlank() }
+        ?: "All Time"
 
-    val countsByType = mediaCount.orEmpty()
-        .filterKeys { it != "total" }
-        .mapNotNull { (type, value) ->
-            value.asIntOrNull()
-                ?.takeIf { it > 0 }
-                ?.let { StatisticsOverview.TypeCount(type, labels[type] ?: type.replaceFirstChar { c -> c.uppercase() }, it) }
+    val summaries = stats["summary_stats_by_type"].toStringKeyMapOrNull().orEmpty()
+    val consumption = stats["consumption_stats_by_type"].toStringKeyMapOrNull().orEmpty()
+    val talentBySort = stats["top_talent"].toStringKeyMapOrNull()
+        ?.get("by_sort").toStringKeyMapOrNull()
+        ?.get("plays").toStringKeyMapOrNull()
+
+    val scoreDatasets = (stats["score_distribution"].toStringKeyMapOrNull()?.get("datasets") as? List<*>)
+        .orEmpty()
+        .mapNotNull { it.toStringKeyMapOrNull() }
+
+    val statusTotals = (stats["status_distribution"].toStringKeyMapOrNull()?.get("datasets") as? List<*>)
+        .orEmpty()
+        .mapNotNull { row ->
+            val dataset = row.toStringKeyMapOrNull() ?: return@mapNotNull null
+            val label = dataset["label"]?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            dataset["total"].asIntOrNull()?.takeIf { it > 0 }?.let { StatisticsOverview.StatusTotal(label, it) }
         }
-        .sortedByDescending { it.count }
 
-    val statusTotals = (
-        stats["status_distribution"].toStringKeyMapOrNull()?.get("datasets") as? List<*>
-        ).orEmpty().mapNotNull { row ->
-        val dataset = row.toStringKeyMapOrNull() ?: return@mapNotNull null
-        val label = dataset["label"]?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-        dataset["total"].asIntOrNull()?.takeIf { it > 0 }?.let { StatisticsOverview.StatusTotal(label, it) }
+    val statusDistribution = stats["status_distribution"].toStringKeyMapOrNull()
+    val statusLabels = (statusDistribution?.get("labels") as? List<*>)
+        .orEmpty()
+        .map { it?.toString()?.lowercase().orEmpty() }
+    val statusDatasets = (statusDistribution?.get("datasets") as? List<*>)
+        .orEmpty()
+        .mapNotNull { it.toStringKeyMapOrNull() }
+
+    val types = MEDIA_TYPES.mapNotNull { (type, label, playsLabel) ->
+        val summary = summaries[type].toStringKeyMapOrNull() ?: return@mapNotNull null
+        val media = consumption[type].toStringKeyMapOrNull() ?: return@mapNotNull null
+        val primary = media["primary"].toStringKeyMapOrNull().orEmpty()
+        val secondary = media["secondary"].toStringKeyMapOrNull().orEmpty()
+        val consumptionSection = stats["${type}_consumption"].toStringKeyMapOrNull().orEmpty()
+        val charts = consumptionSection["charts"].toStringKeyMapOrNull().orEmpty()
+        // The per-type charts count plays; the combined charts measure hours,
+        // which is what the screen shows. Fall back to plays when Floppy does
+        // not send the combined section.
+        val combined = stats["combined_plays_charts"].toStringKeyMapOrNull().orEmpty()
+        fun hoursChart(key: String): List<Float> =
+            combined[key].toStringKeyMapOrNull()?.get(type).asChartPoints()
+
+        // The status chart is split by media type: labels carry the types and
+        // every dataset is one status with a count per type.
+        val statusIndex = statusLabels.indexOfFirst { it == SCORE_LABELS[type] }
+        val typeStatus = if (statusIndex >= 0) {
+            statusDatasets.mapNotNull { dataset ->
+                val statusLabel = dataset["label"]?.toString()?.takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
+                val value = (dataset["data"] as? List<*>)?.getOrNull(statusIndex).asIntOrNull()
+                    ?: return@mapNotNull null
+                value.takeIf { it > 0 }?.let { StatisticsOverview.StatusTotal(statusLabel, it) }
+            }
+        } else {
+            emptyList()
+        }
+
+        val tracked = summary["total"].asIntOrNull() ?: 0
+        val completed = summary["completed"].asIntOrNull() ?: 0
+        val hours = primary["total"].asDoubleOrNull() ?: 0.0
+        if (tracked == 0 && completed == 0 && hours <= 0.0) return@mapNotNull null
+
+        val listedScores = (scoreDatasets.firstOrNull {
+            it["label"]?.toString()?.lowercase() == SCORE_LABELS[type]
+        }?.get("data") as? List<*>).orEmpty().mapNotNull { it.asIntOrNull() }
+
+        StatisticsOverview.TypeStats(
+            type = type,
+            label = label,
+            tracked = tracked,
+            completed = completed,
+            hours = hours,
+            plays = secondary["total"].asIntOrNull() ?: 0,
+            playsLabel = playsLabel,
+            hoursPerMonth = primary["per_month"].asDoubleOrNull() ?: 0.0,
+            hoursPerDay = primary["per_day"].asDoubleOrNull() ?: 0.0,
+            // `has_score` is false when nothing in the library has a score, even
+            // though an average may still be serialised.
+            averageScore = summary["average_score"].asDoubleOrNull()
+                ?.takeIf { summary["has_score"] != false },
+            byMonth = hoursChart("by_month").ifEmpty { charts["by_month"].asChartPoints() },
+            byWeekday = hoursChart("by_weekday").ifEmpty { charts["by_weekday"].asChartPoints() },
+            byTimeOfDay = hoursChart("by_time_of_day").ifEmpty { charts["by_time_of_day"].asChartPoints() },
+            topGenres = (consumptionSection["top_genres"] as? List<*>).orEmpty()
+                .mapNotNull { it.asNamedValue() }
+                .sortedByDescending { it.minutes }
+                .take(6),
+            topDecades = (consumptionSection["top_decades"] as? List<*>).orEmpty()
+                .mapNotNull { it.asNamedValue() }
+                .sortedByDescending { it.minutes }
+                .take(5),
+            mostWatched = (stats["top_played"].toStringKeyMapOrNull()?.get(type) as? List<*>).orEmpty()
+                .mapNotNull { it.asMostWatched() }
+                .sortedByDescending { it.minutes }
+                .take(5),
+            talent = TALENT_CATEGORIES.flatMap { (category, key) ->
+                (talentBySort?.get(key) as? List<*>).orEmpty()
+                    .mapNotNull { it.asTalent(category) }
+                    .take(5)
+            },
+            statusTotals = typeStatus,
+            scoreBins = listedScores,
+            scoreMax = stats["score_distribution"].toStringKeyMapOrNull()?.get("scale_max").asIntOrNull() ?: 10,
+        )
     }
 
-    val mostWatched = stats["top_played"].toStringKeyMapOrNull().orEmpty().flatMap { (type, value) ->
-        (value as? List<*>).orEmpty().mapNotNull { row ->
-            val entry = row.toStringKeyMapOrNull() ?: return@mapNotNull null
-            val item = entry["media"].toStringKeyMapOrNull()?.get("item").toStringKeyMapOrNull()
-            val title = item?.get("title")?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            StatisticsOverview.MostWatched(
-                title = title,
-                mediaType = type,
-                image = item["image"]?.toString(),
-                plays = entry["play_count"].asIntOrNull() ?: 0,
-                duration = entry["formatted_duration"]?.toString()?.takeIf { it.isNotBlank() },
-                minutes = entry["total_time_minutes"].asIntOrNull() ?: 0,
+    val activityStats = stats["activity_data"].toStringKeyMapOrNull()
+        ?.get("stats").toStringKeyMapOrNull()
+        ?: summaries["all"].toStringKeyMapOrNull()
+
+    val streakStart = activityStats?.get("longest_streak_start")?.toString()?.takeIf { it.isNotBlank() }
+    val streakEnd = activityStats?.get("longest_streak_end")?.toString()?.takeIf { it.isNotBlank() }
+
+    val today = LocalDate.now()
+    // The calendar starts at the oldest play in the library - forty years for
+    // someone who has imported their history - so keep only the last half year.
+    val heatmap = (stats["activity_data"].toStringKeyMapOrNull()?.get("calendar_weeks") as? List<*>)
+        .orEmpty()
+        .mapNotNull { row ->
+            val day = row.toStringKeyMapOrNull() ?: return@mapNotNull null
+            val date = day["date"]?.toString()?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                ?: return@mapNotNull null
+            if (date.isBefore(today.minusDays(HEATMAP_DAYS))) return@mapNotNull null
+            StatisticsOverview.HeatmapDay(
+                date = date.toString(),
+                count = day["count"].asIntOrNull() ?: 0,
+                level = day["level"].asIntOrNull() ?: 0,
+                byType = (day["by_type"] as? Map<*, *>).orEmpty()
+                    .mapNotNull { (type, value) ->
+                        val name = type?.toString() ?: return@mapNotNull null
+                        val amount = value.asIntOrNull() ?: return@mapNotNull null
+                        name to amount
+                    }
+                    .toMap(),
             )
         }
-    }.sortedByDescending { it.minutes }.take(10)
-
-    // Total watch time. `hours_per_media_type` is formatted text
-    // ("5764h 40min"), so the numeric total comes from summary_stats_by_type;
-    // the formatted map is only a fallback for a numeric shape.
-    val totalMinutes = stats["summary_stats_by_type"]
-        .toStringKeyMapOrNull()?.get("all").toStringKeyMapOrNull()?.get("total_minutes").asIntOrNull()
-
-    val totalHours = totalMinutes?.let { it / 60.0 }
-        ?: (stats["hours_per_media_type"] as? Map<*, *>)?.values
-            ?.mapNotNull { it.asDoubleOrNull() }
-            ?.takeIf { it.isNotEmpty() }
-            ?.sum()
-
-    // Streaks and the most active day live under summary_stats_by_type.all;
-    // scores under score_distribution.
-    val summaryAll = stats["summary_stats_by_type"]
-        .toStringKeyMapOrNull()?.get("all").toStringKeyMapOrNull()
-    val scoreDistribution = stats["score_distribution"].toStringKeyMapOrNull()
-
-    val streakStart = summaryAll?.get("longest_streak_start")?.toString()?.takeIf { it.isNotBlank() }
-    val streakEnd = summaryAll?.get("longest_streak_end")?.toString()?.takeIf { it.isNotBlank() }
-    val longestStreakRange = if (streakStart != null && streakEnd != null) {
-        "$streakStart → $streakEnd"
-    } else {
-        null
-    }
-
-    val watchTimeByType = (stats["hours_per_media_type"] as? Map<*, *>)
-        ?.entries.orEmpty()
-        .mapNotNull { (key, value) ->
-            val type = key?.toString() ?: return@mapNotNull null
-            val text = value?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            StatisticsOverview.TypeValue(labels[type] ?: type.replaceFirstChar { c -> c.uppercase() }, text)
-        }
-        .sortedByDescending { it.value }
 
     return StatisticsOverview(
-        totalItems = mediaCount?.get("total").asIntOrNull() ?: 0,
-        countsByType = countsByType,
+        rangeName = rangeName,
+        types = types,
         statusTotals = statusTotals,
-        mostWatched = mostWatched,
-        totalHours = totalHours,
-        averageScore = scoreDistribution?.get("average_score").asDoubleOrNull(),
-        scoredCount = scoreDistribution?.get("total_scored").asIntOrNull(),
-        currentStreak = summaryAll?.get("current_streak").asIntOrNull(),
-        longestStreak = summaryAll?.get("longest_streak").asIntOrNull(),
-        longestStreakRange = longestStreakRange,
-        mostActiveDay = summaryAll?.get("most_active_day")?.toString()?.takeIf { it.isNotBlank() },
-        watchTimeByType = watchTimeByType,
+        heatmap = heatmap,
+        activity = StatisticsOverview.Activity(
+            mostActiveDay = activityStats?.get("most_active_day")?.toString()?.takeIf { it.isNotBlank() },
+            mostActiveDayPercentage = activityStats?.get("most_active_day_percentage").asIntOrNull(),
+            currentStreak = activityStats?.get("current_streak").asIntOrNull(),
+            longestStreak = activityStats?.get("longest_streak").asIntOrNull(),
+            longestStreakRange = if (streakStart != null && streakEnd != null) "$streakStart → $streakEnd" else null,
+        ),
+    )
+}
+
+/** The media types the app knows how to display, in tab order. */
+private val MEDIA_TYPES = listOf(
+    Triple("tv", "Shows", "episodes"),
+    Triple("movie", "Movies", "plays"),
+    Triple("anime", "Anime", "episodes"),
+)
+
+/** Dataset labels inside `score_distribution`, lowercased. */
+private val SCORE_LABELS = mapOf(
+    "tv" to "tv show",
+    "movie" to "movie",
+    "anime" to "anime",
+)
+
+/** Talent keys inside `top_talent.by_sort.plays`. */
+private val TALENT_CATEGORIES = listOf(
+    "actors" to "top_actors",
+    "actresses" to "top_actresses",
+    "directors" to "top_directors",
+    "writers" to "top_writers",
+    "studios" to "top_studios",
+)
+
+private const val HEATMAP_DAYS = 182L
+
+/**
+ * A chart dataset as numbers. Floppy sends the per-type charts as a list of
+ * numbers and the combined charts as one space-separated string, so both shapes
+ * are accepted.
+ */
+private fun Any?.asChartPoints(): List<Float> {
+    val dataset = (toStringKeyMapOrNull()?.get("datasets") as? List<*>)
+        ?.firstOrNull()
+        .toStringKeyMapOrNull()
+        ?: return emptyList()
+    return when (val data = dataset["data"]) {
+        is List<*> -> data.mapNotNull { it.asDoubleOrNull()?.toFloat() }
+        is String -> data.trim().split(' ').mapNotNull { it.toFloatOrNull() }
+        else -> emptyList()
+    }
+}
+
+private fun Any?.asNamedValue(): StatisticsOverview.NamedValue? {
+    val row = toStringKeyMapOrNull() ?: return null
+    // Genres carry `name`; decades carry `label`.
+    val name = (row["name"] ?: row["label"])?.toString()?.takeIf { it.isNotBlank() } ?: return null
+    return StatisticsOverview.NamedValue(
+        name = name,
+        minutes = row["minutes"].asIntOrNull() ?: 0,
+        plays = row["plays"].asIntOrNull() ?: 0,
+        formatted = row["formatted_duration"]?.toString()?.takeIf { it.isNotBlank() },
+    )
+}
+
+private fun Any?.asMostWatched(): StatisticsOverview.MostWatched? {
+    val entry = toStringKeyMapOrNull() ?: return null
+    val item = entry["media"].toStringKeyMapOrNull()?.get("item").toStringKeyMapOrNull() ?: return null
+    val title = item["title"]?.toString()?.takeIf { it.isNotBlank() } ?: return null
+    return StatisticsOverview.MostWatched(
+        title = title,
+        image = item["image"]?.toString(),
+        plays = entry["play_count"].asIntOrNull() ?: 0,
+        durations = entry["formatted_duration"]?.toString()?.takeIf { it.isNotBlank() },
+        minutes = entry["total_time_minutes"].asIntOrNull() ?: 0,
+    )
+}
+
+private fun Any?.asTalent(category: String): StatisticsOverview.Talent? {
+    val row = toStringKeyMapOrNull() ?: return null
+    val name = row["name"]?.toString()?.takeIf { it.isNotBlank() } ?: return null
+    return StatisticsOverview.Talent(
+        category = category,
+        name = name,
+        // Studios carry a `logo`; people carry an `image`.
+        image = (row["image"] ?: row["logo"])?.toString()?.takeIf { it.isNotBlank() },
+        plays = row["plays"].asIntOrNull() ?: 0,
+        minutes = row["watched_minutes"].asIntOrNull() ?: 0,
+        formatted = row["watched_time"]?.toString()?.takeIf { it.isNotBlank() },
+        uniqueTitles = row["unique_titles"].asIntOrNull() ?: 0,
     )
 }
 

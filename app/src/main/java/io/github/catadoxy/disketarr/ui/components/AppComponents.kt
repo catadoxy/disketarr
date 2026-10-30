@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -36,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -159,6 +162,46 @@ fun UnderlineTabRow(
                 .background(MaterialTheme.colorScheme.outlineVariant),
         )
     }
+}
+
+/**
+ * Content for a tabbed screen that can also be moved by swiping sideways.
+ *
+ * The tab row stays with the caller; this only pairs the pager with the
+ * caller's selection. [onPageSelected] fires once a swipe settles, never
+ * halfway through - reacting mid-swipe would fight the gesture.
+ */
+@Composable
+fun SwipeableTabPager(
+    pageCount: Int,
+    selectedIndex: Int,
+    onPageSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable (page: Int) -> Unit,
+) {
+    if (pageCount <= 1) {
+        content(0)
+        return
+    }
+
+    val pagerState = rememberPagerState(pageCount = { pageCount })
+
+    LaunchedEffect(selectedIndex, pageCount) {
+        if (selectedIndex in 0 until pageCount && pagerState.currentPage != selectedIndex) {
+            pagerState.animateScrollToPage(selectedIndex)
+        }
+    }
+    LaunchedEffect(pagerState, pageCount) {
+        snapshotFlow { pagerState.settledPage }.collect { page ->
+            if (page in 0 until pageCount) onPageSelected(page)
+        }
+    }
+
+    HorizontalPager(
+        state = pagerState,
+        modifier = modifier,
+        beyondViewportPageCount = 1,
+    ) { page -> content(page) }
 }
 
 /**

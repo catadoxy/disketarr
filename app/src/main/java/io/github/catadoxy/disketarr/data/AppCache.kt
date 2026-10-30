@@ -211,7 +211,7 @@ class AppCacheRepository @Inject constructor(
     fun statistics(): Stats? {
         val mem = statisticsPage
         if (mem != null) return mem
-        val payload = diskCache?.get("stats|${baseUrl ?: "default"}") ?: return null
+        val payload = diskCache?.get("stats2|${baseUrl ?: "default"}") ?: return null
         val parsed = runCatching { statsAdapter.fromJson(payload) }.getOrNull() ?: return null
         statisticsPage = parsed
         return parsed
@@ -221,7 +221,7 @@ class AppCacheRepository @Inject constructor(
     fun putStatistics(value: StatisticsOverview, now: Long = System.currentTimeMillis()) {
         val stats = Stats(value, now)
         statisticsPage = stats
-        diskCache?.put("stats|${baseUrl ?: "default"}", baseUrl, statsAdapter.toJson(stats))
+        diskCache?.put("stats2|${baseUrl ?: "default"}", baseUrl, statsAdapter.toJson(stats))
     }
 
     // ---- browse pages (Shows / Movies tabs) -------------------------------

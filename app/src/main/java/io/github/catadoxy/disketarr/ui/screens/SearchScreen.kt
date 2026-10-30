@@ -67,6 +67,7 @@ import coil.compose.AsyncImage
 import io.github.catadoxy.disketarr.data.model.LibraryType
 import io.github.catadoxy.disketarr.data.model.Pagination
 import io.github.catadoxy.disketarr.data.model.SearchResult
+import io.github.catadoxy.disketarr.ui.components.SwipeableTabPager
 import io.github.catadoxy.disketarr.ui.components.UnderlineTabRow
 import io.github.catadoxy.disketarr.viewmodel.SearchUiState
 import io.github.catadoxy.disketarr.viewmodel.SearchViewModel
@@ -213,6 +214,30 @@ fun SearchScreen(
             }
         }
 
+        SwipeableTabPager(
+            pageCount = mediaTypes.size,
+            selectedIndex = mediaTypes
+                .indexOfFirst { normalizeMediaType(it.key) == selectedType }
+                .coerceAtLeast(0),
+            onPageSelected = { index ->
+                val normalized = normalizeMediaType(mediaTypes[index].key)
+                if (normalized != selectedType) {
+                    selectedType = normalized
+                    if (query.isNotBlank()) {
+                        viewModel.searchMedia(query.trim(), mediaType = normalized)
+                    }
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+        ) { page ->
+            val pageType = normalizeMediaType(mediaTypes[page].key)
+            if (pageType != selectedType) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else {
         when (val state = uiState) {
             is SearchUiState.Idle -> {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -318,6 +343,8 @@ fun SearchScreen(
                         }
                     }
                 }
+            }
+        }
             }
         }
     }
